@@ -1,0 +1,7 @@
+{% if errors %}
+  <div class="inline-status error">{{ errors|join(' ') }}</div>
+{% elif autosaved %}
+  <div class="inline-status success">Autosaved at {{ page.ts_local or 'now' }}</div>
+{% else %}
+  <div class="inline-status muted">Last saved page {{ page.page_number }} in {{ journal.title }}</div>
+{% endif %}

@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard · Journal App{% endblock %}
+{% block content %}
+<section class="panel two-col">
+  <div>
+    <h1>Journals</h1>
+    <p class="muted">Browse your journals, monitor progress, and jump back into editing.</p>
+  </div>
+  <div class="stats-inline">
+    <div class="stat-pill"><strong>{{ journals|length }}</strong><span>Journals</span></div>
+    <div class="stat-pill"><strong>{{ journals|sum(attribute='page_count') }}</strong><span>Pages</span></div>
+  </div>
+</section>
+
+<section class="panel two-col">
+  <div>
+    <h2>Add Journal</h2>
+    <p class="muted">Create a new journal when you're ready, otherwise just browse the list below.</p>
+  </div>
+  <div class="actions-col">
+    <button type="button" class="secondary" data-toggle-target="#journal-create-form">Add Journal</button>
+  </div>
+</section>
+
+<section id="journal-create-form" class="panel stack hidden">
+  <form class="stack" method="post" action="{{ url_for('journal.create_journal') }}">
+    <label>Title<input type="text" name="title" required></label>
+    <label>Owner<input type="text" name="owner"></label>
+    <label>Description<textarea name="description" rows="3"></textarea></label>
+    <label class="checkbox"><input type="checkbox" name="has_translation"> Has translation</label>
+    <button type="submit">Create Journal</button>
+  </form>
+</section>
+
+<section class="cards-grid">
+  {% for journal in journals %}
+    <a class="card journal-card" href="{{ url_for('journal.view_journal', journal_id=journal.id) }}">
+      {% if journal.thumbnail_url %}
+        <img src="{{ journal.thumbnail_url }}" alt="{{ journal.title }}">
+      {% else %}
+        <div class="placeholder">No pages yet</div>
+      {% endif %}
+      <div class="card-body">
+        <h3>{{ journal.title }}</h3>
+        <p>{{ journal.owner or 'No owner' }}</p>
+        <div class="meta-row">
+          <span>{{ journal.pages|length if journal.pages is defined else journal.page_count }} pages</span>
+          <span>{{ journal.last_modified }}</span>
+        </div>
+        <div class="meta-row">
+          <span>{% if journal.has_translation %}Translation{% else %}No translation{% endif %}</span>
+          <span>{{ journal.owner or 'No owner' }}</span>
+        </div>
+      </div>
+    </a>
+  {% else %}
+    <div class="panel">No journals yet. Create one or upload a batch of pages.</div>
+  {% endfor %}
+</section>
+{% endblock %}

@@ -1,0 +1,18 @@
+services:
+  journalapp:
+    build: .
+    container_name: journalapp
+    ports:
+      - "5000:5000"
+    environment:
+      JOURNAL_HOST: 0.0.0.0
+      JOURNAL_PORT: 5000
+      JOURNAL_DEBUG: "false"
+      JOURNAL_DATA_DIR: /data
+      JOURNAL_JOURNALS_DIR: /data/journals
+      JOURNAL_THUMBS_DIR: /data/.thumbnails
+      JOURNAL_BACKUP_CONFIG_PATH: /data/config/backup_config.yml
+      JOURNAL_SECRET_KEY: change-me
+    volumes:
+      - /srv/journalcapture/data:/data
+    restart: unless-stopped

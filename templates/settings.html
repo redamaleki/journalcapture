@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block title %}Settings · Journal App{% endblock %}
+{% block content %}
+<section class="grid grid-2">
+  <form class="panel stack" method="post">
+    <h1>Backup Settings</h1>
+    <p class="muted">Phase 1 stores your SMB share details locally for one-click backups.</p>
+    <label>SMB Path<input type="text" name="path" value="{{ config.path }}" placeholder="/mnt/journal-backups or mounted SMB path"></label>
+    <label>Username<input type="text" name="username" value="{{ config.username }}"></label>
+    <label>Password<input type="password" name="password" value="{{ config.password }}"></label>
+    <button type="submit">Save Settings</button>
+  </form>
+
+  <div class="panel stack">
+    <h2>Backup Actions</h2>
+    <form method="post" action="{{ url_for('journal.backup_all') }}">
+      <button type="submit">Backup All Journals</button>
+    </form>
+    <div class="stack-sm">
+      {% for journal in journals %}
+        <form method="post" action="{{ url_for('journal.backup_journal', journal_id=journal.id) }}" class="row-between">
+          <span>{{ journal.title }}</span>
+          <button type="submit">Backup This Journal</button>
+        </form>
+      {% else %}
+        <p class="muted">No journals yet.</p>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endblock %}

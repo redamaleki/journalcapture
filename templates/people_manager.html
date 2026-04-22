@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block title %}People · {{ journal.title }}{% endblock %}
+{% block content %}
+<section class="panel stack">
+  <div class="row-between wrap gap-sm">
+    <div>
+      <h1>Manage People</h1>
+      <p class="muted">People for {{ journal.title }}. These tags are reused across this journal only.</p>
+    </div>
+    <a class="button secondary small-btn" href="{{ url_for('journal.view_journal', journal_id=journal.id) }}">Back to Journal</a>
+  </div>
+</section>
+
+<section class="grid grid-2">
+  <form class="panel stack" method="post" action="{{ url_for('journal.add_person', journal_id=journal.id) }}">
+    <h2>Add Person</h2>
+    <label>Name<input type="text" name="name" required></label>
+    <label>Relation<input type="text" name="relation"></label>
+    <label>Notes<textarea name="notes" rows="4"></textarea></label>
+    <button type="submit">Save Person</button>
+  </form>
+
+  <section class="panel stack">
+    <h2>Saved People</h2>
+    <div class="stack-sm">
+      {% for person in journal.people %}
+        <div class="grouped-entry-card">
+          <div class="meta-row"><strong>{{ person.name }}</strong><span>{{ person.relation or 'No relation' }}</span></div>
+          {% if person.notes %}<p class="muted">{{ person.notes }}</p>{% endif %}
+        </div>
+      {% else %}
+        <p class="muted">No people saved yet.</p>
+      {% endfor %}
+    </div>
+  </section>
+</section>
+{% endblock %}
