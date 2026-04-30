@@ -17,16 +17,6 @@ body {
   background: var(--bg);
   color: var(--text);
 }
-body.scrolled .site-header {
-  padding-top: 8px;
-  padding-bottom: 8px;
-}
-body.scrolled .tagline {
-  display: none;
-}
-body.scrolled .brand {
-  font-size: 1rem;
-}
 a { color: inherit; text-decoration: none; }
 .site-header {
   display: flex; justify-content: space-between; align-items: center; gap: 16px;
@@ -165,7 +155,8 @@ button.danger { background: var(--danger); }
 .journal-sidebar { position: sticky; top: 86px; }
 .journal-hero-panel { gap: 14px; }
 .journal-main-column { min-width: 0; }
-.journal-mobile-summary { display: none; transition: padding .18s ease, gap .18s ease, top .18s ease; }
+.journal-mobile-summary { display: none; }
+.cover-upload-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .journal-mobile-summary h1 { margin: 0; font-size: 1.15rem; }
 .mobile-description { margin: 4px 0 0; }
 .mobile-cover-row { display: flex; }
@@ -214,17 +205,6 @@ button.danger { background: var(--danger); }
   .journal-sidebar { position: static; display: none; }
   .journal-mobile-summary {
     display: block; position: sticky; top: 70px; z-index: 5; backdrop-filter: blur(10px); padding: 12px;
-  }
-  body.scrolled .journal-mobile-summary {
-    padding: 8px 10px;
-  }
-  body.scrolled .journal-mobile-summary .mobile-cover-row,
-  body.scrolled .journal-mobile-summary .mobile-description,
-  body.scrolled .journal-mobile-summary #cover-form-mobile {
-    display: none;
-  }
-  body.scrolled .journal-mobile-summary h1 {
-    font-size: 1rem;
   }
   .page-card-grid { grid-template-columns: 1fr; }
   .visual-page-strip {

@@ -31,17 +31,14 @@
     </div>
 
     <div class="meta-row wrap">
-      <form method="post" action="{{ url_for('journal.upload_cover', journal_id=journal.id) }}" enctype="multipart/form-data">
+      <form method="post" action="{{ url_for('journal.upload_cover', journal_id=journal.id) }}" enctype="multipart/form-data" class="cover-upload-actions" data-cover-upload-form>
         <input type="file" name="cover_photo" accept="image/*" class="hidden" id="cover-file-input">
-        <button type="button" class="button secondary small-btn" onclick="document.getElementById('cover-file-input').click()">Update cover photo</button>
-        <button type="submit" class="small-btn" style="display:none;">Save</button>
+        <input type="file" name="cover_photo" accept="image/*" capture="environment" class="hidden" id="cover-camera-input">
+        <button type="button" class="button secondary small-btn" data-cover-picker="cover-file-input">Choose cover image</button>
+        <button type="button" class="button secondary small-btn" data-cover-picker="cover-camera-input">Take cover photo</button>
+        <button type="submit" class="small-btn hidden" data-cover-save>Save Cover</button>
       </form>
     </div>
-    <script>
-      document.getElementById('cover-file-input').onchange = function() {
-        this.nextElementSibling.nextElementSibling.style.display = 'inline-block';
-      };
-    </script>
   </aside>
 
   <section class="journal-main-column stack">
@@ -70,9 +67,14 @@
           <button type="button" class="secondary small-btn" data-modal-open="#rename-journal-modal">Rename Journal</button>
           <button type="button" class="text-link-btn" data-toggle-target="#cover-form-mobile">Update cover</button>
         </div>
-        <form id="cover-form-mobile" class="stack hidden compact-inline-form" method="post" enctype="multipart/form-data" action="{{ url_for('journal.upload_cover', journal_id=journal.id) }}">
-          <label>Cover photo<input type="file" name="cover_photo" accept="image/*"></label>
-          <button type="submit" class="small-btn">Save Cover</button>
+        <form id="cover-form-mobile" class="stack hidden compact-inline-form" method="post" enctype="multipart/form-data" action="{{ url_for('journal.upload_cover', journal_id=journal.id) }}" data-cover-upload-form>
+          <input type="file" name="cover_photo" accept="image/*" class="hidden" id="cover-file-input-mobile">
+          <input type="file" name="cover_photo" accept="image/*" capture="environment" class="hidden" id="cover-camera-input-mobile">
+          <div class="actions-row wrap">
+            <button type="button" class="secondary small-btn" data-cover-picker="cover-file-input-mobile">Choose cover image</button>
+            <button type="button" class="secondary small-btn" data-cover-picker="cover-camera-input-mobile">Take cover photo</button>
+            <button type="submit" class="small-btn hidden" data-cover-save>Save Cover</button>
+          </div>
         </form>
       </div>
     </section>
@@ -179,7 +181,7 @@
     </div>
     <form class="stack" method="post" enctype="multipart/form-data" action="{{ url_for('journal.upload_to_journal', journal_id=journal.id) }}">
       <div class="stack-sm">
-        <label>Page images<input type="file" name="images" accept="image/*" multiple capture="environment"></label>
+        <label>Page images<input type="file" name="images" accept="image/*" multiple></label>
         <label>Take photo<input type="file" name="images" accept="image/*" capture="environment"></label>
       </div>
       <button type="submit" class="small-btn">Upload Pages</button>
