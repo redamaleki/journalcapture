@@ -93,12 +93,26 @@ def copy_file(src, dst: Path) -> None:
         shutil.copyfileobj(in_f, out_f)
 
 
+def _normalized_image(image: Image.Image) -> Image.Image:
+    image = ImageOps.exif_transpose(image)
+    if image.mode not in ("RGB",):
+        image = image.convert("RGB")
+    return image
+
+
+def save_uploaded_image_as_jpeg(src, dst: Path, *, quality: int = 90) -> None:
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    if hasattr(src, 'seek'):
+        src.seek(0)
+    with Image.open(src) as image:
+        normalized = _normalized_image(image)
+        normalized.save(dst, format='JPEG', quality=quality)
+
+
 def make_thumbnail(source: Path, dest: Path, size=(480, 480)) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     with Image.open(source) as im:
-        im = ImageOps.exif_transpose(im)
-        if im.mode in ("RGBA", "P", "LA"):
-            im = im.convert("RGB")
+        im = _normalized_image(im)
         im.thumbnail(size)
         im.save(dest, format='JPEG', quality=85)
 
