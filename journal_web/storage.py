@@ -487,6 +487,13 @@ class JournalStore:
             self.backup_journal(journal['id'])
         return str(root)
 
+    def rename_journal(self, journal_id: str, new_title: str, new_description: str) -> None:
+        journal_dir = self.journals_dir / journal_id
+        meta, _ = load_frontmatter(journal_dir / 'journal.md')
+        meta['title'] = new_title.strip()
+        meta['description'] = new_description.strip()
+        save_yaml_only(journal_dir / 'journal.md', update_last_modified(meta))
+
     def touch_journal(self, journal_id: str) -> None:
         journal_dir, _ = self.journal_paths(journal_id)
         meta, _ = load_frontmatter(journal_dir / 'journal.md')

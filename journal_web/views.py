@@ -82,6 +82,19 @@ def create_journal():
     return redirect(url_for('journal.view_journal', journal_id=journal_id))
 
 
+@bp.route('/journals/<journal_id>/rename', methods=['POST'])
+def rename_journal(journal_id: str):
+    title = request.form.get('title', '').strip()
+    description = request.form.get('description', '').strip()
+    next_url = request.form.get('next') or request.referrer or url_for('journal.view_journal', journal_id=journal_id)
+    if not title:
+        flash('Journal title cannot be empty.', 'error')
+        return redirect(next_url)
+    store().rename_journal(journal_id, title, description)
+    flash('Journal renamed.', 'success')
+    return redirect(next_url)
+
+
 @bp.route('/journals/<journal_id>/upload', methods=['POST'])
 def upload_to_journal(journal_id: str):
     db = store()
