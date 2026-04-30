@@ -21,7 +21,7 @@
     <div class="actions-col wrap">
       <a class="button secondary small-btn" href="{{ url_for('journal.add_person', journal_id=journal.id) }}">Manage People</a>
       <button type="button" class="secondary small-btn" data-modal-open="#add-pages-modal">Add Pages</button>
-      <a class="button secondary small-btn" href="{{ url_for('journal.settings') }}">Settings</a>
+      <button type="button" class="secondary small-btn" data-modal-open="#rename-journal-modal">Rename Journal</button>
       <form method="post" action="{{ url_for('journal.backup_journal', journal_id=journal.id) }}">
         <button type="submit" class="small-btn">Backup This Journal</button>
       </form>
@@ -31,12 +31,17 @@
     </div>
 
     <div class="meta-row wrap">
-      <button type="button" class="text-link-btn" data-toggle-target="#cover-form">Update cover photo</button>
+      <form method="post" action="{{ url_for('journal.upload_cover', journal_id=journal.id) }}" enctype="multipart/form-data">
+        <input type="file" name="cover_photo" accept="image/*" class="hidden" id="cover-file-input">
+        <button type="button" class="button secondary small-btn" onclick="document.getElementById('cover-file-input').click()">Update cover photo</button>
+        <button type="submit" class="small-btn" style="display:none;">Save</button>
+      </form>
     </div>
-    <form id="cover-form" class="stack hidden compact-inline-form" method="post" enctype="multipart/form-data" action="{{ url_for('journal.upload_cover', journal_id=journal.id) }}">
-      <label>Cover photo<input type="file" name="cover_photo" accept="image/*" capture="environment"></label>
-      <button type="submit" class="small-btn">Save Cover</button>
-    </form>
+    <script>
+      document.getElementById('cover-file-input').onchange = function() {
+        this.nextElementSibling.nextElementSibling.style.display = 'inline-block';
+      };
+    </script>
   </aside>
 
   <section class="journal-main-column stack">
@@ -62,6 +67,7 @@
         <div class="actions-col wrap mobile-journal-actions">
           <button type="button" class="secondary small-btn" data-modal-open="#add-pages-modal">Add Pages</button>
           <a class="button secondary small-btn" href="{{ url_for('journal.add_person', journal_id=journal.id) }}">People</a>
+          <button type="button" class="secondary small-btn" data-modal-open="#rename-journal-modal">Rename Journal</button>
           <button type="button" class="text-link-btn" data-toggle-target="#cover-form-mobile">Update cover</button>
         </div>
         <form id="cover-form-mobile" class="stack hidden compact-inline-form" method="post" enctype="multipart/form-data" action="{{ url_for('journal.upload_cover', journal_id=journal.id) }}">
@@ -177,6 +183,22 @@
         <label>Take photo<input type="file" name="images" accept="image/*" capture="environment"></label>
       </div>
       <button type="submit" class="small-btn">Upload Pages</button>
+    </form>
+  </div>
+</div>
+
+<div id="rename-journal-modal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" data-modal-close></div>
+  <div class="modal-dialog panel stack" role="dialog" aria-modal="true" aria-labelledby="rename-journal-title">
+    <div class="row-between wrap gap-sm">
+      <h2 id="rename-journal-title">Rename Journal</h2>
+      <button type="button" class="secondary small-btn" data-modal-close>Close</button>
+    </div>
+    <form class="stack" method="post" action="{{ url_for('journal.rename_journal', journal_id=journal.id) }}">
+      <input type="hidden" name="next" value="{{ request.path }}">
+      <label>Title<input type="text" name="title" value="{{ journal.title }}" required></label>
+      <label>Description<input type="text" name="description" value="{{ journal.description or '' }}"></label>
+      <button type="submit" class="small-btn">Save Rename</button>
     </form>
   </div>
 </div>
