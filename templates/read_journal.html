@@ -1,0 +1,155 @@
+{% extends 'base.html' %}
+{% block title %}Reading: {{ journal.title }}{% endblock %}
+
+{% block content %}
+<section class="read-shell">
+  <aside class="read-sidebar">
+    <div class="read-thumbnails" id="read-thumbnail-list">
+      {% for page in journal.pages %}
+      <div class="thumb-tile" data-page-slug="{{ page.slug }}">
+        <img src="{{ page.thumbnail_url }}" alt="Page {{ page.page_number }}" style="cursor: pointer;" onclick="openLightbox('{{ page.image_url }}')">
+        <span>P{{ page.page_number }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </aside>
+
+  <main class="read-timeline">
+    <div class="timeline-controls">
+      <a href="{{ url_for('journal.view_journal', journal_id=journal.id) }}">← Journal Overview</a>
+      {% if journal.has_translation %}
+      <div class="switch-group">
+        <label class="switch">
+          <input type="checkbox" onchange="showView(this.checked)">
+          <span class="slider"></span>
+        </label>
+        <span id="view-label">Transcription</span>
+      </div>
+      {% endif %}
+    </div>
+
+
+
+    <div id="timeline-body">
+      {% set ns = namespace(last_date='__INITIAL__') %}
+      {% for entry in entries %}
+        {% set next_entry = entries[loop.index] if not loop.last else None %}
+        {% if entry.entry_date != ns.last_date %}
+          <div class="date-header" style="margin-top: 2rem; font-size: 1.25rem; border-bottom: 2px solid #ddd; padding-bottom: 5px; margin-bottom: 10px;">{{ entry.entry_date or 'No Date' }}</div>
+          {% set ns.last_date = entry.entry_date %}
+        {% endif %}
+      <article class="timeline-entry" data-page-slug="{{ entry.page_slug }}">
+        <div class="entry-content" data-mode="transcription">{{ entry.transcription | safe }}</div>
+        <div class="entry-content hidden" data-mode="translation">{{ entry.translation | safe }}</div>
+
+        <div class="scrapbook-previews"{% if not (entry.scrapbook_urls and entry.scrapbook_urls|length > 0) and not (next_entry is none or next_entry.page_slug != entry.page_slug) %} style="display:none;"{% endif %}>{%- if next_entry is none or next_entry.page_slug != entry.page_slug -%}<span class="mobile-only"><button type="button" class="text-link-btn" onclick="openLightbox('{{ entry.page_image_url }}')">View Page</button>{% if entry.scrapbook_urls and entry.scrapbook_urls|length > 0 %} | {% endif %}</span>{%- endif -%}{%- for url in entry.scrapbook_urls -%}<button type="button" class="text-link-btn" onclick="openLightbox('{{ url }}')">Scrapbook {{ loop.index }}</button>{% if not loop.last %} | {% endif %}{%- endfor -%}</div>
+      </article>
+      {% endfor %}
+    </div>
+  </main>
+</section>
+
+<style>
+.read-shell { display: flex; height: 100vh; overflow: hidden; }
+.read-sidebar { width: 160px; flex-shrink: 0; overflow-y: auto; background: #f4f4f4; border-right: 1px solid #ccc; }
+@media (max-width: 768px) { .read-sidebar { display: none; } }
+.thumb-tile { cursor: pointer; padding: 5px; border-bottom: 1px solid #eee; transition: background-color .15s ease, box-shadow .15s ease; }
+.thumb-tile.active { background: #fff8d8; box-shadow: inset 4px 0 0 #d6a800; }
+.thumb-tile img { width: 100%; height: auto; display: block; }
+.read-timeline { flex: 1; overflow-y: auto; padding: 20px; }
+.timeline-entry { margin-bottom: 2rem; border-bottom: 1px solid #eee; padding-bottom: 1rem; }
+.date-header { font-weight: bold; color: #555; }
+.scrapbook-previews img { width: 100px; height: 100px; object-fit: cover; cursor: pointer; margin-right: 5px; }
+
+/* Slider switch */
+.switch { position: relative; display: inline-block; width: 60px; height: 34px; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+.slider:before { position: absolute; content: ""; height: 26px; width: 26px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+input:checked + .slider { background-color: #2196F3; }
+input:checked + .slider:before { transform: translateX(26px); }
+.desktop-only { display: block; }
+.scrapbook-previews { white-space: nowrap; }
+@media (max-width: 768px) { .mobile-only { display: inline; } .desktop-only { display: none; } }
+@media (min-width: 769px) { .mobile-only { display: none; } .desktop-only { display: block; } }
+
+.modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; }
+.modal.visible { display: flex; }
+.modal img { max-width: 95vw; max-height: 95vh; width: auto; height: auto; object-fit: contain; }
+.timeline-controls { display: flex; align-items: center; gap: 15px; margin-bottom: 20px; }
+.switch-group { display: flex; align-items: center; gap: 10px; }
+
+</style>
+
+<div id="lightbox" class="modal" onclick="this.classList.remove('visible')">
+  <img id="lightbox-img" src="">
+</div>
+
+<script src="{{ url_for('static', filename='js/lightbox_debug.js') }}"></script>
+<script>
+function showView(isTranslation) {
+  const mode = isTranslation ? 'translation' : 'transcription';
+  document.getElementById('view-label').textContent = isTranslation ? 'Translation' : 'Transcription';
+  document.querySelectorAll('.entry-content').forEach(el => el.classList.add('hidden'));
+  document.querySelectorAll(`[data-mode="${mode}"]`).forEach(el => el.classList.remove('hidden'));
+}
+
+function openLightbox(url) {
+  if (!url) return;
+  document.getElementById('lightbox-img').src = url;
+  document.getElementById('lightbox').classList.add('visible');
+}
+
+// Keep the left thumbnails synced with the reading position.
+const timeline = document.querySelector('.read-timeline');
+const sidebar = document.querySelector('.read-sidebar');
+const entries = Array.from(document.querySelectorAll('.timeline-entry'));
+const thumbs = Array.from(document.querySelectorAll('.thumb-tile'));
+let activePageSlug = null;
+let syncQueued = false;
+
+function setActiveThumbnail(slug) {
+  if (!slug || slug === activePageSlug) return;
+  activePageSlug = slug;
+
+  thumbs.forEach(thumb => thumb.classList.toggle('active', thumb.dataset.pageSlug === slug));
+
+  const activeThumb = thumbs.find(thumb => thumb.dataset.pageSlug === slug);
+  if (activeThumb && sidebar) {
+    activeThumb.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
+function syncThumbnailToReadingPosition() {
+  syncQueued = false;
+  if (!timeline || !entries.length) return;
+
+  const timelineTop = timeline.getBoundingClientRect().top;
+  const readingAnchor = timelineTop + Math.min(220, timeline.clientHeight * 0.35);
+  let currentEntry = entries[0];
+
+  for (const entry of entries) {
+    if (entry.getBoundingClientRect().top <= readingAnchor) {
+      currentEntry = entry;
+    } else {
+      break;
+    }
+  }
+
+  setActiveThumbnail(currentEntry.dataset.pageSlug);
+}
+
+function queueThumbnailSync() {
+  if (syncQueued) return;
+  syncQueued = true;
+  requestAnimationFrame(syncThumbnailToReadingPosition);
+}
+
+if (timeline) {
+  timeline.addEventListener('scroll', queueThumbnailSync, { passive: true });
+  window.addEventListener('resize', queueThumbnailSync);
+  syncThumbnailToReadingPosition();
+}
+</script>
+
+{% endblock %}

@@ -9,3 +9,7 @@ uploads/
 .env.*
 .pytest_cache/
 .DS_Store
+
+# Local runtime data
+data/
+app.log

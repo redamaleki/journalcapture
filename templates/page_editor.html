@@ -11,7 +11,7 @@
   {% elif nav.is_last %}
     <a class="button secondary nav-btn small-btn guarded-nav" href="{{ url_for('journal.view_journal', journal_id=journal.id) }}#add-pages-modal">＋ Add Page</a>
   {% endif %}
-  <a class="button secondary small-btn guarded-nav" href="{{ url_for('journal.view_journal', journal_id=journal.id) }}">Back</a>
+  <a class="button secondary small-btn guarded-nav" href="{{ url_for('journal.view_journal', journal_id=journal.id) }}">Journal Overview</a>
 {% endblock %}
 {% block content %}
 <section class="panel stack compact-title-card page-editor-intro">

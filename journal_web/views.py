@@ -7,6 +7,7 @@ from flask import (
     current_app,
     flash,
     jsonify,
+    make_response,
     redirect,
     render_template,
     request,
@@ -244,6 +245,40 @@ def thumbnail(journal_id: str, filename: str):
     return send_file(path)
 
 
+
+@bp.route('/journals/<journal_id>/read')
+def read_journal(journal_id: str):
+    db = store()
+    journal = db.get_journal(journal_id)
+    # Flatten fresh entries from all pages, keeping track of page origin.
+    all_entries = []
+    for page in journal['pages']:
+        page_entries = page.get('entries') or []
+        if not page_entries and any((page.get('entry_date'), page.get('transcription'), page.get('translation'), page.get('notes'))):
+            page_entries = [{
+                'entry_date': page.get('entry_date', ''),
+                'transcription': page.get('transcription', ''),
+                'translation': page.get('translation', ''),
+                'notes': page.get('notes', ''),
+            }]
+        for entry in page_entries:
+            all_entries.append({
+                **entry,
+                'page_slug': page['slug'],
+                'page_number': page['page_number'],
+                'page_image_url': page.get('image_url'),
+                'scrapbook_urls': page.get('scrapbook_urls', []),
+            })
+
+    # Sort by date, fallback to page number.
+    sorted_entries = sorted(all_entries, key=lambda e: (e.get('entry_date') or '9999-99-99', e.get('page_number') or 0))
+
+    response = make_response(render_template('read_journal.html', journal=journal, entries=sorted_entries))
+    response.headers['Cache-Control'] = 'no-store, max-age=0'
+    return response
+
+
 @bp.route('/healthz')
 def healthz():
     return jsonify({'ok': True})
+

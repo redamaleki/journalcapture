@@ -6,6 +6,9 @@
     <div class="journal-hero-copy">
       <h1>{{ journal.title }}</h1>
       <p class="muted">{{ journal.description or 'No description yet.' }}</p>
+      <div style="margin-top: 15px; margin-bottom: 20px;">
+        <a class="button btn-success" style="width: 100%; text-align: center; font-size: 1.1em; padding: 12px;" href="{{ url_for('journal.read_journal', journal_id=journal.id) }}">Read Journal 📖</a>
+      </div>
       <div class="meta-row wrap">
         <span>Owner: {{ journal.owner or 'Unknown' }}</span>
         <span>{{ journal.page_count }} page{% if journal.page_count != 1 %}s{% endif %}</span>
@@ -62,6 +65,7 @@
           {% endif %}
         </div>
         <div class="actions-col wrap mobile-journal-actions">
+          <a class="button btn-success small-btn" style="width: 100%; text-align: center;" href="{{ url_for('journal.read_journal', journal_id=journal.id) }}">Read Journal 📖</a>
           <button type="button" class="secondary small-btn" data-modal-open="#add-pages-modal">Add Pages</button>
           <a class="button secondary small-btn" href="{{ url_for('journal.add_person', journal_id=journal.id) }}">People</a>
           <button type="button" class="secondary small-btn" data-modal-open="#rename-journal-modal">Rename Journal</button>
