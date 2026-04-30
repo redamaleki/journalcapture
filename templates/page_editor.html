@@ -135,10 +135,10 @@
     </section>
 
     <div class="bottom-danger-row">
-      <form method="post" action="{{ url_for('journal.delete_page', journal_id=journal.id, page_slug=page.slug) }}" onsubmit="return confirm('Delete this page?');">
-        <button type="submit" class="danger small-btn">Delete Page</button>
-      </form>
+      <button type="submit" form="delete-page-form" class="danger small-btn">Delete Page</button>
     </div>
   </form>
 </section>
+
+<form id="delete-page-form" method="post" action="{{ url_for('journal.delete_page', journal_id=journal.id, page_slug=page.slug) }}" onsubmit="return confirm('Delete this page?');"></form>
 {% endblock %}

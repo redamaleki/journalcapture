@@ -71,7 +71,7 @@
           <button type="button" class="text-link-btn" data-toggle-target="#cover-form-mobile">Update cover</button>
         </div>
         <form id="cover-form-mobile" class="stack hidden compact-inline-form" method="post" enctype="multipart/form-data" action="{{ url_for('journal.upload_cover', journal_id=journal.id) }}">
-          <label>Cover photo<input type="file" name="cover_photo" accept="image/*" capture="environment"></label>
+          <label>Cover photo<input type="file" name="cover_photo" accept="image/*"></label>
           <button type="submit" class="small-btn">Save Cover</button>
         </form>
       </div>
@@ -179,7 +179,7 @@
     </div>
     <form class="stack" method="post" enctype="multipart/form-data" action="{{ url_for('journal.upload_to_journal', journal_id=journal.id) }}">
       <div class="stack-sm">
-        <label>Page images<input type="file" name="images" accept="image/*" multiple></label>
+        <label>Page images<input type="file" name="images" accept="image/*" multiple capture="environment"></label>
         <label>Take photo<input type="file" name="images" accept="image/*" capture="environment"></label>
       </div>
       <button type="submit" class="small-btn">Upload Pages</button>

@@ -97,6 +97,8 @@ def make_thumbnail(source: Path, dest: Path, size=(480, 480)) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     with Image.open(source) as im:
         im = ImageOps.exif_transpose(im)
+        if im.mode in ("RGBA", "P", "LA"):
+            im = im.convert("RGB")
         im.thumbnail(size)
         im.save(dest, format='JPEG', quality=85)
 
