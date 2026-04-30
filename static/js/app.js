@@ -42,6 +42,12 @@ document.addEventListener('change', (event) => {
   if (toggle) toggleTarget(toggle);
   if (event.target.closest('#page-edit-form')) formDirty = true;
 
+  if (event.target.matches('input[type="file"][name="cover_photo"], input[type="file"][name="page_image"]')) {
+    const form = event.target.closest('[data-cover-upload-form]');
+    const saveButton = form?.querySelector('[data-cover-save]');
+    if (saveButton) saveButton.classList.toggle('hidden', !event.target.files?.length);
+  }
+
   if (event.target.matches('.entry-date-input')) {
     const block = event.target.closest('.entry-block');
     const chip = block?.querySelector('.entry-date-chip');
@@ -82,6 +88,12 @@ document.addEventListener('click', (event) => {
 
   const modalClose = event.target.closest('[data-modal-close]');
   if (modalClose) closeModal(modalClose.closest('.modal'));
+
+  const coverPicker = event.target.closest('[data-cover-picker]');
+  if (coverPicker) {
+    const input = document.getElementById(coverPicker.dataset.coverPicker);
+    if (input) input.click();
+  }
 
   const suggestion = event.target.closest('.fill-suggestion');
   if (suggestion) {

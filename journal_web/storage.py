@@ -18,6 +18,7 @@ from .utils import (
     now_iso_date,
     read_people,
     save_frontmatter,
+    save_uploaded_image_as_jpeg,
     save_yaml_only,
     sort_key_page_name,
     update_last_modified,
@@ -195,7 +196,7 @@ class JournalStore:
             'notes': '',
         }
         try:
-            copy_file(uploaded_file.stream, image_path)
+            save_uploaded_image_as_jpeg(uploaded_file.stream, image_path)
             save_frontmatter(meta_path, meta)
             self.thumbnail_for(image_path, journal_id, image_path.name)
         except Exception:
@@ -404,7 +405,7 @@ class JournalStore:
         next_idx = len(items) + 1
         filename = f'{page_slug}-scrapbook-{next_idx}.jpg'
         path = pages_dir / filename
-        copy_file(uploaded_file.stream, path)
+        save_uploaded_image_as_jpeg(uploaded_file.stream, path)
         items.append(filename)
         meta['scrapbook_items'] = items
         save_frontmatter(pages_dir / f'{page_slug}.md', meta)
@@ -437,11 +438,18 @@ class JournalStore:
         journal_dir, _ = self.journal_paths(journal_id)
         filename = 'cover.jpg'
         cover_path = journal_dir / filename
-        copy_file(uploaded_file.stream, cover_path)
+        save_uploaded_image_as_jpeg(uploaded_file.stream, cover_path)
         meta = self.get_journal_meta(journal_id)
         meta['cover_photo'] = filename
         save_yaml_only(journal_dir / 'journal.md', update_last_modified(meta))
         self.thumbnail_for(cover_path, journal_id, filename)
+
+    def replace_page_image(self, journal_id: str, page_slug: str, uploaded_file) -> None:
+        _, pages_dir = self.journal_paths(journal_id)
+        image_path = pages_dir / f'{page_slug}.jpg'
+        save_uploaded_image_as_jpeg(uploaded_file.stream, image_path)
+        self.thumbnail_for(image_path, journal_id, image_path.name)
+        self.touch_journal(journal_id)
 
     def add_person(self, journal_id: str, name: str, relation: str, notes: str) -> None:
         journal_dir, _ = self.journal_paths(journal_id)

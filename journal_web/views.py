@@ -23,6 +23,13 @@ def store() -> JournalStore:
     return JournalStore()
 
 
+def first_uploaded_file(field_name: str):
+    for uploaded in request.files.getlist(field_name):
+        if uploaded and uploaded.filename:
+            return uploaded
+    return None
+
+
 @bp.route('/')
 def dashboard():
     journals = store().list_journals()
@@ -131,10 +138,12 @@ def reorder_pages(journal_id: str):
 
 @bp.route('/journals/<journal_id>/cover', methods=['POST'])
 def upload_cover(journal_id: str):
-    uploaded = request.files.get('cover_photo')
-    if uploaded and uploaded.filename:
+    uploaded = first_uploaded_file('cover_photo')
+    if uploaded:
         store().save_cover_photo(journal_id, uploaded)
         flash('Cover photo updated.', 'success')
+    else:
+        flash('Choose a cover photo first.', 'error')
     return redirect(url_for('journal.view_journal', journal_id=journal_id))
 
 
@@ -193,6 +202,17 @@ def delete_page(journal_id: str, page_slug: str):
     if nav.get('prev'):
         return redirect(url_for('journal.edit_page', journal_id=journal_id, page_slug=nav['prev']['slug']))
     return redirect(url_for('journal.view_journal', journal_id=journal_id))
+
+
+@bp.route('/journals/<journal_id>/pages/<page_slug>/image', methods=['POST'])
+def replace_page_image(journal_id: str, page_slug: str):
+    uploaded = first_uploaded_file('page_image')
+    if uploaded:
+        store().replace_page_image(journal_id, page_slug, uploaded)
+        flash('Page image updated.', 'success')
+    else:
+        flash('Choose a page image first.', 'error')
+    return redirect(url_for('journal.edit_page', journal_id=journal_id, page_slug=page_slug))
 
 
 @bp.route('/journals/<journal_id>/pages/<page_slug>/scrapbook', methods=['POST'])

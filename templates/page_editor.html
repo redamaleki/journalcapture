@@ -30,6 +30,13 @@
       {% if page.image_url %}
         <a href="{{ page.image_url }}" target="_blank" class="main-image-link"><img class="main-image" src="{{ page.image_url }}" alt="Page image"></a>
       {% endif %}
+      <form class="cover-upload-actions" method="post" enctype="multipart/form-data" action="{{ url_for('journal.replace_page_image', journal_id=journal.id, page_slug=page.slug) }}" data-cover-upload-form>
+        <input type="file" name="page_image" accept="image/*" class="hidden" id="page-file-input">
+        <input type="file" name="page_image" accept="image/*" capture="environment" class="hidden" id="page-camera-input">
+        <button type="button" class="button secondary small-btn" data-cover-picker="page-file-input">Choose page image</button>
+        <button type="button" class="button secondary small-btn" data-cover-picker="page-camera-input">Take page photo</button>
+        <button type="submit" class="small-btn hidden" data-cover-save>Save Page Image</button>
+      </form>
     </section>
 
     <section class="panel stack scrapbook-panel">
