@@ -451,6 +451,42 @@ class JournalStore:
         self.thumbnail_for(image_path, journal_id, image_path.name)
         self.touch_journal(journal_id)
 
+    def page_image_path(self, journal_id: str, page_slug: str) -> Path:
+        _, pages_dir = self.journal_paths(journal_id)
+        return pages_dir / f'{page_slug}.jpg'
+
+    def apply_transcribed_entries(self, journal_id: str, page_slug: str, entries: list[dict[str, Any]], adjusted_image_bytes: bytes | None = None) -> None:
+        _, pages_dir = self.journal_paths(journal_id)
+        page_path = pages_dir / f'{page_slug}.md'
+        current, body = load_frontmatter(page_path)
+        clean_entries = []
+        for entry in entries:
+            item = {
+                'entry_date': (entry.get('entry_date') or '').strip(),
+                'transcription': entry.get('transcription') or '',
+                'translation': entry.get('translation') or '',
+                'notes': entry.get('notes') or '',
+            }
+            if any([item['entry_date'], item['transcription'].strip(), item['translation'].strip(), item['notes'].strip()]):
+                clean_entries.append(item)
+        primary = clean_entries[0] if clean_entries else {'entry_date': '', 'transcription': '', 'translation': '', 'notes': ''}
+        current.update({
+            'entry_date': primary.get('entry_date', ''),
+            'transcription': primary.get('transcription', ''),
+            'translation': primary.get('translation', ''),
+            'notes': primary.get('notes', ''),
+            'entries': clean_entries,
+        })
+        save_frontmatter(page_path, current, body)
+        if adjusted_image_bytes:
+            image_path = pages_dir / f'{page_slug}.jpg'
+            image_path.write_bytes(adjusted_image_bytes)
+            thumb = self.thumbs_dir / journal_id / image_path.name
+            if thumb.exists():
+                thumb.unlink()
+            self.thumbnail_for(image_path, journal_id, image_path.name)
+        self.touch_journal(journal_id)
+
     def add_person(self, journal_id: str, name: str, relation: str, notes: str) -> None:
         journal_dir, _ = self.journal_paths(journal_id)
         people_path = journal_dir / 'people.json'

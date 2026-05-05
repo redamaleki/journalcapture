@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from uuid import uuid4
 
 from flask import (
     Blueprint,
@@ -16,6 +17,7 @@ from flask import (
 )
 
 from .storage import JournalStore
+from . import openrouter_addin
 
 bp = Blueprint('journal', __name__)
 
@@ -120,8 +122,8 @@ def upload_to_journal(journal_id: str):
 def view_journal(journal_id: str):
     db = store()
     journal = db.get_journal(journal_id)
-    sort_mode = request.args.get('sort', 'page')
-    view_mode = request.args.get('view', 'visual')
+    sort_mode = request.args.get('sort', 'date')
+    view_mode = request.args.get('view', 'list')
     pages = journal['pages']
     if sort_mode == 'date':
         pages = sorted(pages, key=lambda p: (p.get('entry_date') or '9999-99-99', p.get('page_number') or 999999))
@@ -180,7 +182,87 @@ def edit_page(journal_id: str, page_slug: str):
     journal = db.get_journal(journal_id)
     page = db.get_page(journal_id, page_slug)
     nav = db.page_navigation(journal_id, page_slug)
-    return render_template('page_editor.html', journal=journal, page=page, nav=nav)
+    transcribe_enabled = bool(current_app.config.get('TRANSCRIBE_TRANSLATE_ENABLED')) and openrouter_addin.enabled()
+    return render_template('page_editor.html', journal=journal, page=page, nav=nav, transcribe_enabled=transcribe_enabled)
+
+
+@bp.route('/journals/<journal_id>/pages/<page_slug>/transcribe-translate/preview', methods=['POST'])
+def transcribe_translate_preview(journal_id: str, page_slug: str):
+    if not (current_app.config.get('TRANSCRIBE_TRANSLATE_ENABLED') and openrouter_addin.enabled()):
+        flash('Transcribe and Translate add-in is not configured.', 'error')
+        return redirect(url_for('journal.edit_page', journal_id=journal_id, page_slug=page_slug))
+    db = store()
+    journal = db.get_journal(journal_id, include_pages=False)
+    page = db.get_page(journal_id, page_slug)
+    image_path = db.page_image_path(journal_id, page_slug)
+    if not image_path.exists():
+        flash('This page does not have an image to transcribe.', 'error')
+        return redirect(url_for('journal.edit_page', journal_id=journal_id, page_slug=page_slug))
+    previous_date_text = request.form.get('previous_date_text', '').strip()
+    journal_year = request.form.get('journal_year', '').strip()
+    create_adjusted = request.form.get('create_adjusted_image') == 'on'
+    try:
+        result = openrouter_addin.transcribe_page(
+            image_path,
+            previous_date_text=previous_date_text,
+            journal_year=journal_year,
+            include_translation=bool(journal.get('has_translation')),
+        )
+        adjusted = openrouter_addin.create_adjusted_image(image_path) if create_adjusted else None
+        adjusted_artifact_name = ''
+        if adjusted and adjusted.get('data_url'):
+            artifact_dir = current_app.config['DATA_DIR'] / 'transcribe_artifacts'
+            artifact_dir.mkdir(parents=True, exist_ok=True)
+            adjusted_artifact_name = f'{uuid4().hex}.jpg'
+            (artifact_dir / adjusted_artifact_name).write_bytes(openrouter_addin.decode_data_url(adjusted['data_url']))
+            adjusted['artifact_name'] = adjusted_artifact_name
+    except Exception as exc:
+        flash(str(exc), 'error')
+        return redirect(url_for('journal.edit_page', journal_id=journal_id, page_slug=page_slug))
+    return render_template(
+        'transcribe_preview.html',
+        journal=journal,
+        page=page,
+        result=result,
+        adjusted=adjusted,
+        previous_date_text=previous_date_text,
+        journal_year=journal_year,
+    )
+
+
+@bp.route('/journals/<journal_id>/pages/<page_slug>/transcribe-translate/accept', methods=['POST'])
+def transcribe_translate_accept(journal_id: str, page_slug: str):
+    db = store()
+    entries = []
+    dates = request.form.getlist('entry_date')
+    transcriptions = request.form.getlist('entry_transcription')
+    translations = request.form.getlist('entry_translation')
+    notes = request.form.getlist('entry_notes')
+    total = max(len(dates), len(transcriptions), len(translations), len(notes), 0)
+    for idx in range(total):
+        entries.append({
+            'entry_date': dates[idx] if idx < len(dates) else '',
+            'transcription': transcriptions[idx] if idx < len(transcriptions) else '',
+            'translation': translations[idx] if idx < len(translations) else '',
+            'notes': notes[idx] if idx < len(notes) else '',
+        })
+    adjusted_bytes = None
+    artifact_name = request.form.get('adjusted_artifact_name', '').strip()
+    if artifact_name and ('/' in artifact_name or '\\' in artifact_name or not artifact_name.endswith('.jpg')):
+        flash('Invalid adjusted image artifact.', 'error')
+        return redirect(url_for('journal.edit_page', journal_id=journal_id, page_slug=page_slug))
+    artifact_path = current_app.config['DATA_DIR'] / 'transcribe_artifacts' / artifact_name if artifact_name else None
+    if request.form.get('replace_with_adjusted_image') == 'on' and artifact_path:
+        try:
+            adjusted_bytes = artifact_path.read_bytes()
+        except Exception as exc:
+            flash(f'Could not load adjusted image: {exc}', 'error')
+            return redirect(url_for('journal.edit_page', journal_id=journal_id, page_slug=page_slug))
+    db.apply_transcribed_entries(journal_id, page_slug, entries, adjusted_image_bytes=adjusted_bytes)
+    if artifact_path and artifact_path.exists():
+        artifact_path.unlink()
+    flash('Transcription and translation accepted.', 'success')
+    return redirect(url_for('journal.edit_page', journal_id=journal_id, page_slug=page_slug))
 
 
 @bp.route('/journals/<journal_id>/pages/<page_slug>/autosave', methods=['POST'])

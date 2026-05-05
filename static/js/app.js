@@ -1,5 +1,6 @@
 let formDirty = false;
 let sortableVisualPages = null;
+let mobileHeaderCollapsed = false;
 
 function toggleTarget(trigger) {
   const target = document.querySelector(trigger.dataset.toggleTarget);
@@ -36,6 +37,10 @@ function initVisualPageSort() {
     touchStartThreshold: 8
   });
 }
+
+document.addEventListener('toggle', (event) => {
+  if (event.target.matches('.entry-details')) updateEntrySummary(event.target);
+}, true);
 
 document.addEventListener('change', (event) => {
   const toggle = event.target.closest('[data-toggle-target]');
@@ -77,6 +82,19 @@ document.addEventListener('input', (event) => {
 
 document.addEventListener('submit', (event) => {
   if (event.target.id === 'page-edit-form') formDirty = false;
+
+  if (event.target.matches('[data-processing-form]')) {
+    const modal = document.getElementById('processing-modal');
+    if (modal) {
+      modal.classList.remove('hidden');
+      modal.setAttribute('aria-hidden', 'false');
+    }
+    const submitButton = event.target.querySelector('button[type="submit"]');
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.textContent = 'Processing…';
+    }
+  }
 });
 
 document.addEventListener('click', (event) => {
@@ -124,7 +142,7 @@ document.addEventListener('click', (event) => {
         </div>
         <label>Date<input type="date" class="entry-date-input" name="entry_date" value="${defaultDate}"></label>
         <details class="entry-details" open>
-          <summary>Edit entry</summary>
+          <summary>Collapse entry</summary>
           <div class="stack entry-details-body">
             ${hasTranslation ? '<label>Translation<textarea name="entry_translation" rows="5"></textarea></label>' : '<input type="hidden" name="entry_translation" value="">'}
             <label>Transcription<textarea name="entry_transcription" rows="6"></textarea></label>
@@ -165,13 +183,28 @@ if (window.location.hash === '#add-pages-modal') {
 }
 
 function updateScrolledState() {
-  document.body.classList.toggle('scrolled', window.scrollY > 56);
+  // Hysteresis prevents mobile flicker when the sticky journal header changes
+  // height near the cutoff point: collapse after scrolling well past it, but
+  // don't expand again until nearly back at the top.
+  if (!mobileHeaderCollapsed && window.scrollY > 220) mobileHeaderCollapsed = true;
+  if (mobileHeaderCollapsed && window.scrollY < 60) mobileHeaderCollapsed = false;
+  document.body.classList.toggle('scrolled', mobileHeaderCollapsed);
+}
+
+function updateEntrySummary(details) {
+  const summary = details?.querySelector('summary');
+  if (summary) summary.textContent = details.open ? 'Collapse entry' : 'Expand entry';
+}
+
+function initEntrySummaries() {
+  document.querySelectorAll('.entry-details').forEach(updateEntrySummary);
 }
 
 window.addEventListener('scroll', updateScrolledState, { passive: true });
 window.addEventListener('load', () => {
   updateScrolledState();
   initVisualPageSort();
+  initEntrySummaries();
 });
 
 window.addEventListener('beforeunload', (event) => {

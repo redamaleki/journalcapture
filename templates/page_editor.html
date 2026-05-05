@@ -25,50 +25,26 @@
 </section>
 
 <section class="editor-layout">
-  <div class="stack">
-    <section class="panel stack image-panel">
-      {% if page.image_url %}
-        <a href="{{ page.image_url }}" target="_blank" class="main-image-link"><img class="main-image" src="{{ page.image_url }}" alt="Page image"></a>
-      {% endif %}
-      <form class="cover-upload-actions" method="post" enctype="multipart/form-data" action="{{ url_for('journal.replace_page_image', journal_id=journal.id, page_slug=page.slug) }}" data-cover-upload-form>
-        <input type="file" name="page_image" accept="image/*" class="hidden" id="page-file-input">
-        <input type="file" name="page_image" accept="image/*" capture="environment" class="hidden" id="page-camera-input">
-        <button type="button" class="button secondary small-btn" data-cover-picker="page-file-input">Choose page image</button>
-        <button type="button" class="button secondary small-btn" data-cover-picker="page-camera-input">Take page photo</button>
-        <button type="submit" class="small-btn hidden" data-cover-save>Save Page Image</button>
-      </form>
-    </section>
-
-    <section class="panel stack scrapbook-panel">
-      <div class="row-between wrap gap-sm">
-        <div>
-          <h2>Scrapbook</h2>
-          <p class="muted">Scroll sideways to review attached items.</p>
-        </div>
-        <form class="scrapbook-upload-form" method="post" enctype="multipart/form-data" action="{{ url_for('journal.add_scrapbook_item', journal_id=journal.id, page_slug=page.slug) }}">
-          <label class="file-pill">
-            <span>Add item</span>
-            <input type="file" name="scrapbook_image" accept="image/*" required>
-          </label>
-          <button type="submit" class="small-btn">Upload</button>
-        </form>
-      </div>
-
-      <div class="scrapbook-row clean-scroll">
-        {% for scrapbook in page.scrapbook_items %}
-        <div class="scrapbook-card compact-scrapbook-card">
-          <img src="{{ url_for('journal.page_asset', journal_id=journal.id, filename=scrapbook) }}" alt="Scrapbook item">
-          <form method="post" action="{{ url_for('journal.remove_scrapbook_item', journal_id=journal.id, page_slug=page.slug) }}">
-            <input type="hidden" name="filename" value="{{ scrapbook }}">
-            <button type="submit" class="danger small-btn">Remove</button>
-          </form>
-        </div>
-        {% else %}
-        <p class="muted">No scrapbook items yet.</p>
-        {% endfor %}
-      </div>
-    </section>
-  </div>
+  <section class="panel stack image-panel">
+    {% if page.image_url %}
+      <a href="{{ page.image_url }}" target="_blank" class="main-image-link"><img class="main-image" src="{{ page.image_url }}" alt="Page image"></a>
+    {% endif %}
+    <form class="cover-upload-actions" method="post" enctype="multipart/form-data" action="{{ url_for('journal.replace_page_image', journal_id=journal.id, page_slug=page.slug) }}" data-cover-upload-form>
+      <input type="file" name="page_image" accept="image/*" class="hidden" id="page-file-input">
+      <input type="file" name="page_image" accept="image/*" capture="environment" class="hidden" id="page-camera-input">
+      <button type="button" class="button secondary small-btn" data-cover-picker="page-file-input">Choose page image</button>
+      <button type="button" class="button secondary small-btn" data-cover-picker="page-camera-input">Take page photo</button>
+      <button type="submit" class="small-btn hidden" data-cover-save>Save Page Image</button>
+    </form>
+    {% if transcribe_enabled and page.image_url %}
+    <form class="stack-sm transcribe-translate-form" method="post" action="{{ url_for('journal.transcribe_translate_preview', journal_id=journal.id, page_slug=page.slug) }}" data-processing-form>
+      <input type="hidden" name="previous_date_text" value="{{ nav.suggested_entry_date or '' }}">
+      <input type="hidden" name="journal_year" value="{{ (nav.suggested_entry_date or '')[:4] }}">
+      <button type="submit" class="small-btn">Transcribe and Translate</button>
+      <label class="inline-check"><input type="checkbox" name="create_adjusted_image"> Create de-skewed/cropped review image</label>
+    </form>
+    {% endif %}
+  </section>
 
   <form id="page-edit-form" class="panel stack compact-form page-editor-form" method="post" action="{{ url_for('journal.edit_page', journal_id=journal.id, page_slug=page.slug) }}">
     <div class="editor-meta-bar">
@@ -106,8 +82,8 @@
             {% if loop.index > 1 %}<button type="button" class="text-link-btn remove-entry-btn">Remove</button>{% endif %}
           </div>
           <label>Date<input type="date" class="entry-date-input" name="entry_date" value="{{ entry.entry_date or '' }}"></label>
-          <details class="entry-details" {% if loop.first %}open{% endif %}>
-            <summary>{% if loop.first %}Edit entry{% else %}Expand entry{% endif %}</summary>
+          <details class="entry-details" open>
+            <summary>Collapse entry</summary>
             <div class="stack entry-details-body">
               {% if journal.has_translation %}
                 <label>Translation<textarea name="entry_translation" rows="5">{{ entry.translation }}</textarea></label>
@@ -145,7 +121,46 @@
       <button type="submit" form="delete-page-form" class="danger small-btn">Delete Page</button>
     </div>
   </form>
+
+  <section class="panel stack scrapbook-panel">
+    <div class="row-between wrap gap-sm">
+      <div>
+        <h2>Scrapbook</h2>
+        <p class="muted">Scroll sideways to review attached items.</p>
+      </div>
+      <form class="scrapbook-upload-form" method="post" enctype="multipart/form-data" action="{{ url_for('journal.add_scrapbook_item', journal_id=journal.id, page_slug=page.slug) }}">
+        <label class="file-pill">
+          <span>Add item</span>
+          <input type="file" name="scrapbook_image" accept="image/*" required>
+        </label>
+        <button type="submit" class="small-btn">Upload</button>
+      </form>
+    </div>
+
+    <div class="scrapbook-row clean-scroll">
+      {% for scrapbook in page.scrapbook_items %}
+      <div class="scrapbook-card compact-scrapbook-card">
+        <img src="{{ url_for('journal.page_asset', journal_id=journal.id, filename=scrapbook) }}" alt="Scrapbook item">
+        <form method="post" action="{{ url_for('journal.remove_scrapbook_item', journal_id=journal.id, page_slug=page.slug) }}">
+          <input type="hidden" name="filename" value="{{ scrapbook }}">
+          <button type="submit" class="danger small-btn">Remove</button>
+        </form>
+      </div>
+      {% else %}
+      <p class="muted">No scrapbook items yet.</p>
+      {% endfor %}
+    </div>
+  </section>
 </section>
+
+<div id="processing-modal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop"></div>
+  <div class="modal-dialog panel stack processing-dialog" role="dialog" aria-modal="true" aria-labelledby="processing-title">
+    <h2 id="processing-title">Transcribing and translating…</h2>
+    <p class="muted">The model is reading the original page image. This can take a little while, especially when creating the de-skewed review image too.</p>
+    <div class="processing-spinner" aria-hidden="true"></div>
+  </div>
+</div>
 
 <form id="delete-page-form" method="post" action="{{ url_for('journal.delete_page', journal_id=journal.id, page_slug=page.slug) }}" onsubmit="return confirm('Delete this page?');"></form>
 {% endblock %}

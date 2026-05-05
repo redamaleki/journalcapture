@@ -12,6 +12,7 @@ Local-first journal digitization web app built with Flask, using flat files only
 - Thumbnail generation
 - Backup settings and one-click journal/all backup to a mounted share path
 - Docker-ready deployment with host-mounted storage support
+- Optional OpenRouter-powered Transcribe and Translate add-in with review/accept workflow
 
 ## Local development
 ```bash
@@ -34,8 +35,35 @@ Environment variables supported:
 - `JOURNAL_HOST`
 - `JOURNAL_PORT`
 - `JOURNAL_DEBUG`
+- `TRANSCRIBE_TRANSLATE_ENABLED`
+- `OPENROUTER_API_KEY`
+- `OPENROUTER_MODEL`
+- `OPENROUTER_REASONING_MAX_TOKENS`
+- `OPENROUTER_IMAGE_MODEL`
+- `OPENROUTER_APP_NAME`
+- `OPENROUTER_SITE_URL`
 
 Defaults still support local workspace use if env vars are not set.
+
+## Optional Transcribe and Translate add-in
+
+When enabled, page editor screens show a **Transcribe and Translate** button below the page image. The app sends the original page image to the configured OpenRouter transcription model with the previous-entry date/year context, presents returned entries for review/edit, and saves them only after the user accepts.
+
+If `OPENROUTER_IMAGE_MODEL` is configured and the checkbox is enabled, the app also creates a de-skewed/cropped review image after transcription. That image is not used for transcription. On the review screen the user can optionally replace the stored page image with the adjusted image.
+
+Recommended Docker env:
+
+```yaml
+TRANSCRIBE_TRANSLATE_ENABLED: "true"
+OPENROUTER_API_KEY: "your-key"
+OPENROUTER_MODEL: google/gemini-3-flash-preview
+OPENROUTER_REASONING_MAX_TOKENS: 2000
+OPENROUTER_IMAGE_MODEL: google/gemini-3.1-flash-image-preview
+OPENROUTER_APP_NAME: Journal Capture
+OPENROUTER_SITE_URL: http://localhost:5000
+```
+
+The app keeps the prompt/schema rigid server-side so the returned entries are normalized before review.
 
 ## Docker
 Build:

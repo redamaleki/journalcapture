@@ -17,8 +17,23 @@ def env_bool(name: str, default: bool = False) -> bool:
     return value.strip().lower() in {'1', 'true', 'yes', 'on'}
 
 
+def load_env_file(path: Path) -> None:
+    if not path.exists():
+        return
+    for raw_line in path.read_text(encoding='utf-8').splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        key, value = line.split('=', 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
 def create_app():
     base_dir = Path(__file__).resolve().parent.parent
+    load_env_file(base_dir / '.env')
     default_data_dir = base_dir / 'data'
     app = Flask(
         __name__,
@@ -42,6 +57,7 @@ def create_app():
     app.config['HOST'] = os.environ.get('JOURNAL_HOST', '0.0.0.0')
     app.config['PORT'] = int(os.environ.get('JOURNAL_PORT', '5000'))
     app.config['DEBUG'] = env_bool('JOURNAL_DEBUG', False)
+    app.config['TRANSCRIBE_TRANSLATE_ENABLED'] = env_bool('TRANSCRIBE_TRANSLATE_ENABLED', True)
 
     app.config['JOURNALS_DIR'].mkdir(parents=True, exist_ok=True)
     app.config['THUMBS_DIR'].mkdir(parents=True, exist_ok=True)

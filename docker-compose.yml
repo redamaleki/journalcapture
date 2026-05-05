@@ -13,6 +13,13 @@ services:
       JOURNAL_THUMBS_DIR: /data/.thumbnails
       JOURNAL_BACKUP_CONFIG_PATH: /data/config/backup_config.yml
       JOURNAL_SECRET_KEY: change-me
+      TRANSCRIBE_TRANSLATE_ENABLED: "false"
+      OPENROUTER_API_KEY: ""
+      OPENROUTER_MODEL: google/gemini-3-flash-preview
+      OPENROUTER_REASONING_MAX_TOKENS: 2000
+      OPENROUTER_IMAGE_MODEL: google/gemini-3.1-flash-image-preview
+      OPENROUTER_APP_NAME: Journal Capture
+      OPENROUTER_SITE_URL: http://localhost:5000
     volumes:
       - /srv/journalcapture/data:/data
     restart: unless-stopped

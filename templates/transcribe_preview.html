@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+{% block title %}Review Transcription · Page {{ page.page_number }}{% endblock %}
+{% block header_actions %}
+  <a class="button secondary small-btn" href="{{ url_for('journal.edit_page', journal_id=journal.id, page_slug=page.slug) }}">Back to Page</a>
+{% endblock %}
+{% block content %}
+<section class="panel stack">
+  <div>
+    <h1>Review Transcription and Translation</h1>
+    <p class="muted">Review and edit the model output before accepting it into Page {{ page.page_number }}.</p>
+  </div>
+
+  <div class="grid-two">
+    <div class="stack-sm">
+      <h2>Original image used for transcription</h2>
+      {% if page.image_url %}<img class="main-image" src="{{ page.image_url }}" alt="Original page image">{% endif %}
+    </div>
+    <div class="stack-sm">
+      <h2>Adjusted review image</h2>
+      {% if adjusted and adjusted.data_url %}
+        <img class="main-image" src="{{ adjusted.data_url }}" alt="Adjusted page image">
+        <p class="muted">Created after transcription. It was not used for transcription.</p>
+      {% elif adjusted and adjusted.error %}
+        <p class="error-text">{{ adjusted.error }}</p>
+      {% else %}
+        <p class="muted">No adjusted image requested or image model not configured.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <details>
+    <summary>Run details</summary>
+    <pre class="json-preview">{{ result | tojson(indent=2) }}</pre>
+    {% if adjusted %}<pre class="json-preview">{{ adjusted | tojson(indent=2) }}</pre>{% endif %}
+  </details>
+</section>
+
+<form class="panel stack" method="post" action="{{ url_for('journal.transcribe_translate_accept', journal_id=journal.id, page_slug=page.slug) }}">
+  <div class="row-between wrap gap-sm">
+    <div>
+      <h2>Entries to accept</h2>
+      <p class="muted">Dates are saved as normalized YYYY-MM-DD. Written date headings remain in the transcription text.</p>
+    </div>
+    <button type="submit" class="small-btn">Accept and Save to Page</button>
+  </div>
+
+  {% if adjusted and adjusted.artifact_name %}
+    <input type="hidden" name="adjusted_artifact_name" value="{{ adjusted.artifact_name }}">
+    <label class="inline-check"><input type="checkbox" name="replace_with_adjusted_image"> Replace page image with adjusted image</label>
+  {% endif %}
+
+  {% for entry in result.entries %}
+  <article class="entry-block simple-entry-block">
+    <div class="entry-block-header row-between wrap gap-sm">
+      <div class="entry-chip-wrap">
+        <span class="entry-chip">Entry {{ loop.index }}</span>
+        {% if entry.confidence %}<span class="entry-date-chip">{{ entry.confidence }} confidence</span>{% endif %}
+      </div>
+    </div>
+    <label>Date<input type="date" name="entry_date" value="{{ entry.entry_date }}"></label>
+    {% if journal.has_translation %}
+      <label>Translation<textarea name="entry_translation" rows="6">{{ entry.translation }}</textarea></label>
+    {% else %}
+      <input type="hidden" name="entry_translation" value="">
+    {% endif %}
+    <label>Transcription<textarea name="entry_transcription" rows="8">{{ entry.transcription }}</textarea></label>
+    <label>Comments<textarea name="entry_notes" rows="4">{% for note in entry.review_notes %}{{ note }}{% if not loop.last %}
+{% endif %}{% endfor %}</textarea></label>
+  </article>
+  {% else %}
+  <p class="muted">No entries returned.</p>
+  {% endfor %}
+
+  <div class="row-between wrap gap-sm">
+    <a class="button secondary small-btn" href="{{ url_for('journal.edit_page', journal_id=journal.id, page_slug=page.slug) }}">Cancel</a>
+    <button type="submit" class="small-btn">Accept and Save to Page</button>
+  </div>
+</form>
+{% endblock %}
