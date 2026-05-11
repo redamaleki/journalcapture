@@ -205,9 +205,23 @@ class JournalStore:
             'scrapbook_urls': [f'/journals/{journal_id}/assets/{name}' for name in scrapbooks],
         }
 
-    def create_page_from_upload(self, journal_id: str, uploaded_file) -> str:
-        _, pages_dir = self.journal_paths(journal_id)
+    def create_pages_from_uploads(self, journal_id: str, uploaded_files) -> tuple[list[str], list[str]]:
         page_number = self.next_page_number(journal_id)
+        created = []
+        errors = []
+        for uploaded in uploaded_files:
+            try:
+                created.append(self.create_page_from_upload(journal_id, uploaded, page_number=page_number, touch=False))
+                page_number += 1
+            except Exception as exc:
+                errors.append(f'{uploaded.filename or "Unnamed file"}: {exc}')
+        if created:
+            self.touch_journal(journal_id)
+        return created, errors
+
+    def create_page_from_upload(self, journal_id: str, uploaded_file, page_number: int | None = None, touch: bool = True) -> str:
+        _, pages_dir = self.journal_paths(journal_id)
+        page_number = page_number or self.next_page_number(journal_id)
         page_slug = f'page-{page_number:03d}'
         image_path = pages_dir / f'{page_slug}.jpg'
         meta_path = pages_dir / f'{page_slug}.md'
@@ -234,11 +248,12 @@ class JournalStore:
             if meta_path.exists():
                 meta_path.unlink()
             raise
-        self.touch_journal(journal_id)
+        if touch:
+            self.touch_journal(journal_id)
         return page_slug
 
     def next_page_number(self, journal_id: str) -> int:
-        pages = self.list_pages(journal_id)
+        pages = self.list_pages_basic(journal_id)
         if not pages:
             return 1
         return max(int(page['page_number'] or 0) for page in pages) + 1

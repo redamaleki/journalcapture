@@ -57,6 +57,34 @@ function initVisualPageSort() {
   });
 }
 
+function initEntryNavigator() {
+  const root = document.querySelector('[data-entry-navigator]');
+  if (!root) return;
+  const dataScript = root.querySelector('[data-entry-nav-json]');
+  const select = root.querySelector('[data-entry-select]');
+  const slider = root.querySelector('[data-entry-slider]');
+  const openLink = root.querySelector('[data-entry-open]');
+  const date = root.querySelector('[data-entry-date]');
+  const pages = root.querySelector('[data-entry-pages]');
+  let entries = [];
+  try { entries = JSON.parse(dataScript?.textContent || '[]'); } catch { entries = []; }
+  if (!entries.length || !select || !slider || !openLink || !date || !pages) return;
+
+  function setEntry(index) {
+    const safeIndex = Math.max(0, Math.min(entries.length - 1, Number(index) || 0));
+    const entry = entries[safeIndex];
+    select.value = String(safeIndex);
+    slider.value = String(safeIndex);
+    openLink.href = entry.url;
+    date.textContent = entry.date;
+    pages.textContent = `Page ${entry.page_numbers}${entry.count > 1 ? ` · ${entry.count} pages` : ''}`;
+  }
+
+  select.addEventListener('change', () => setEntry(select.value));
+  slider.addEventListener('input', () => setEntry(slider.value));
+  setEntry(0);
+}
+
 document.addEventListener('toggle', (event) => {
   if (event.target.matches('.entry-details')) updateEntrySummary(event.target);
 }, true);
@@ -70,6 +98,17 @@ document.addEventListener('change', (event) => {
     const form = event.target.closest('[data-cover-upload-form]');
     const saveButton = form?.querySelector('[data-cover-save]');
     if (saveButton) saveButton.classList.toggle('hidden', !event.target.files?.length);
+  }
+
+  if (event.target.matches('[data-file-input]')) {
+    const form = event.target.closest('[data-scrapbook-upload-form]');
+    const label = form?.querySelector('[data-file-label]');
+    const filePill = event.target.closest('.file-pill');
+    const uploadButton = form?.querySelector('[data-scrapbook-upload-button]');
+    const fileName = event.target.files?.[0]?.name || '';
+    if (label) label.textContent = fileName ? `Selected: ${fileName}` : 'Add item';
+    if (filePill) filePill.classList.toggle('has-file', Boolean(fileName));
+    if (uploadButton) uploadButton.disabled = !fileName;
   }
 
   if (event.target.matches('.entry-date-input')) {
@@ -229,6 +268,7 @@ window.addEventListener('scroll', updateScrolledState, { passive: true });
 window.addEventListener('load', () => {
   updateScrolledState();
   initVisualPageSort();
+  initEntryNavigator();
   initEntrySummaries();
 });
 

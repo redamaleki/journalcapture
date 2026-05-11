@@ -52,7 +52,7 @@ def create_app():
     app.config['JOURNALS_DIR'] = journals_dir
     app.config['THUMBS_DIR'] = thumbs_dir
     app.config['SECRET_KEY'] = os.environ.get('JOURNAL_SECRET_KEY', 'journal-phase1-local')
-    app.config['MAX_CONTENT_LENGTH'] = 64 * 1024 * 1024
+    app.config['MAX_CONTENT_LENGTH'] = int(os.environ.get('JOURNAL_MAX_UPLOAD_MB', '256')) * 1024 * 1024
     app.config['BACKUP_CONFIG_PATH'] = backup_config_path
     app.config['HOST'] = os.environ.get('JOURNAL_HOST', '0.0.0.0')
     app.config['PORT'] = int(os.environ.get('JOURNAL_PORT', '5000'))

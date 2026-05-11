@@ -16,6 +16,7 @@ from flask import (
     send_from_directory,
     url_for,
 )
+from werkzeug.exceptions import RequestEntityTooLarge
 
 from .storage import JournalStore
 from . import openrouter_addin
@@ -113,9 +114,11 @@ def upload_to_journal(journal_id: str):
     if not files:
         flash('Choose at least one image to upload.', 'error')
         return redirect(url_for('journal.view_journal', journal_id=journal_id))
-    for uploaded in files:
-        db.create_page_from_upload(journal_id, uploaded)
-    flash(f'Uploaded {len(files)} page(s).', 'success')
+    created, errors = db.create_pages_from_uploads(journal_id, files)
+    if created:
+        flash(f'Uploaded {len(created)} page(s).', 'success')
+    if errors:
+        flash(f'{len(errors)} file(s) could not be uploaded. Try those images again in a smaller batch or with smaller files.', 'error')
     return redirect(url_for('journal.view_journal', journal_id=journal_id))
 
 
@@ -126,9 +129,19 @@ def view_journal(journal_id: str):
     sort_mode = request.args.get('sort', 'date')
     view_mode = request.args.get('view', 'list')
     pages = journal['pages']
+    entry_nav = []
+    for entry_date, entry_pages in sorted(journal.get('grouped_entries', {}).items(), key=lambda item: item[0]):
+        if not entry_pages:
+            continue
+        entry_nav.append({
+            'date': entry_date,
+            'count': len(entry_pages),
+            'page_numbers': ', '.join(str(page.get('page_number') or '') for page in entry_pages),
+            'url': url_for('journal.edit_page', journal_id=journal_id, page_slug=entry_pages[0]['slug']),
+        })
     if sort_mode == 'date':
         pages = sorted(pages, key=lambda p: (p.get('entry_date') or '9999-99-99', p.get('page_number') or 999999))
-    return render_template('journal_view.html', journal=journal, pages=pages, sort_mode=sort_mode, view_mode=view_mode)
+    return render_template('journal_view.html', journal=journal, pages=pages, entry_nav=entry_nav, sort_mode=sort_mode, view_mode=view_mode)
 
 
 @bp.route('/journals/<journal_id>/reorder', methods=['POST'])
@@ -385,6 +398,12 @@ def read_journal(journal_id: str):
     ))
     response.headers['Cache-Control'] = 'no-store, max-age=0'
     return response
+
+
+@bp.errorhandler(RequestEntityTooLarge)
+def upload_too_large(error):
+    flash('That upload was too large for one request. Try fewer images at once, or reduce the image size.', 'error')
+    return redirect(request.referrer or url_for('journal.dashboard'))
 
 
 @bp.route('/healthz')

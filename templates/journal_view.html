@@ -16,7 +16,9 @@
     </div>
 
     {% if journal.thumbnail_url %}
-      <img class="journal-cover-preview large-cover" src="{{ journal.thumbnail_url }}" alt="{{ journal.title }} cover">
+      <button type="button" class="cover-lightbox-trigger" data-lightbox-src="{% if journal.cover_photo %}{{ url_for('journal.cover_asset', journal_id=journal.id) }}{% else %}{{ journal.thumbnail_url }}{% endif %}" aria-label="Open larger cover image">
+        <img class="journal-cover-preview large-cover" src="{{ journal.thumbnail_url }}" alt="{{ journal.title }} cover">
+      </button>
     {% else %}
       <div class="placeholder journal-cover-placeholder">No cover yet</div>
     {% endif %}
@@ -59,7 +61,9 @@
         </div>
         <div class="mobile-cover-row">
           {% if journal.thumbnail_url %}
-            <img class="mobile-cover-preview" src="{{ journal.thumbnail_url }}" alt="{{ journal.title }} cover">
+            <button type="button" class="cover-lightbox-trigger" data-lightbox-src="{% if journal.cover_photo %}{{ url_for('journal.cover_asset', journal_id=journal.id) }}{% else %}{{ journal.thumbnail_url }}{% endif %}" aria-label="Open larger cover image">
+              <img class="mobile-cover-preview" src="{{ journal.thumbnail_url }}" alt="{{ journal.title }} cover">
+            </button>
           {% else %}
             <div class="placeholder mobile-cover-placeholder">No cover yet</div>
           {% endif %}
@@ -153,25 +157,42 @@
       {% endif %}
     </section>
 
-    {% if journal.grouped_entries %}
-    <section class="panel stack">
-      <h2>Grouped Entries</h2>
-      <div class="grouped-entry-list">
-        {% for entry_id, entry_pages in journal.grouped_entries.items() %}
-          <div class="grouped-entry-card">
-            <div class="meta-row"><strong>{{ entry_id }}</strong><span>{{ entry_pages|length }} page(s)</span></div>
-            <div class="grouped-links">
-              {% for entry_page in entry_pages %}
-                <a href="{{ url_for('journal.edit_page', journal_id=journal.id, page_slug=entry_page.slug) }}">Page {{ entry_page.page_number }}</a>
-              {% endfor %}
-            </div>
-          </div>
-        {% endfor %}
+    {% if entry_nav %}
+    <section class="panel stack entry-navigator" data-entry-navigator>
+      <div>
+        <h2>Entry Navigator</h2>
+        <p class="muted">Jump by date without scrolling through hundreds of page cards.</p>
       </div>
+      <div class="entry-picker-row">
+        <label>Entry date
+          <select data-entry-select>
+            {% for entry in entry_nav %}
+              <option value="{{ loop.index0 }}">{{ entry.date }} · Page {{ entry.page_numbers }}{% if entry.count > 1 %} · {{ entry.count }} pages{% endif %}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <a class="button small-btn" data-entry-open href="{{ entry_nav[0].url }}">Open Entry</a>
+      </div>
+      <div class="timeline-control">
+        <input type="range" min="0" max="{{ entry_nav|length - 1 }}" value="0" step="1" data-entry-slider>
+        <div class="timeline-readout">
+          <strong data-entry-date>{{ entry_nav[0].date }}</strong>
+          <span class="muted" data-entry-pages>Page {{ entry_nav[0].page_numbers }}</span>
+        </div>
+      </div>
+      <script type="application/json" data-entry-nav-json>{{ entry_nav | tojson }}</script>
     </section>
     {% endif %}
   </section>
 </section>
+
+<div id="page-lightbox" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" data-lightbox-close></div>
+  <div class="lightbox-shell" role="dialog" aria-modal="true" aria-label="Expanded journal image">
+    <button type="button" class="lightbox-close" data-lightbox-close aria-label="Close image viewer">×</button>
+    <img id="page-lightbox-image" class="lightbox-image" alt="Expanded journal image">
+  </div>
+</div>
 
 <div id="add-pages-modal" class="modal hidden" aria-hidden="true">
   <div class="modal-backdrop" data-modal-close></div>
