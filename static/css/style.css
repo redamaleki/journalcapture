@@ -223,10 +223,11 @@ button.danger { background: var(--danger); }
 .bottom-danger-row { display: flex; justify-content: flex-end; padding-top: 8px; }
 @media (max-width: 900px) {
   .compact-meta-row { grid-template-columns: 1fr; }
-  .editor-layout { grid-template-columns: 1fr; }
-  .editor-media-column, .page-editor-form { min-width: 0; }
-  .editor-media-column { order: 1; }
+  .editor-layout { display: flex; flex-direction: column; }
+  .editor-media-column { display: contents; }
+  .image-panel { order: 1; }
   .page-editor-form { order: 2; }
+  .scrapbook-panel { order: 3; }
   .journal-shell { grid-template-columns: 1fr; }
   .journal-sidebar { position: static; display: none; }
   .journal-mobile-summary {
