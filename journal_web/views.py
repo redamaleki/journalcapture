@@ -13,6 +13,7 @@ from flask import (
     render_template,
     request,
     send_file,
+    send_from_directory,
     url_for,
 )
 
@@ -179,7 +180,7 @@ def edit_page(journal_id: str, page_slug: str):
             journal = db.get_journal(journal_id, include_pages=False)
             return render_template('partials/save_status.html', page=page, journal=journal)
         return redirect(url_for('journal.edit_page', journal_id=journal_id, page_slug=page_slug))
-    journal = db.get_journal(journal_id)
+    journal = db.get_journal(journal_id, include_pages=False)
     page = db.get_page(journal_id, page_slug)
     nav = db.page_navigation(journal_id, page_slug)
     transcribe_enabled = bool(current_app.config.get('TRANSCRIBE_TRANSLATE_ENABLED')) and openrouter_addin.enabled()
@@ -317,8 +318,19 @@ def remove_scrapbook_item(journal_id: str, page_slug: str):
 
 @bp.route('/journals/<journal_id>/assets/<path:filename>')
 def page_asset(journal_id: str, filename: str):
-    path = current_app.config['JOURNALS_DIR'] / journal_id / 'pages' / filename
-    return send_file(path)
+    # Read-only page/scrapbook asset access. send_from_directory keeps requests
+    # inside the journal's pages directory and avoids path traversal.
+    directory = current_app.config['JOURNALS_DIR'] / journal_id / 'pages'
+    return send_from_directory(directory, filename)
+
+
+@bp.route('/journals/<journal_id>/cover-photo')
+def cover_asset(journal_id: str):
+    journal_dir = current_app.config['JOURNALS_DIR'] / journal_id
+    cover_name = store().get_journal_meta(journal_id).get('cover_photo') or ''
+    if not cover_name or '/' in cover_name or '\\' in cover_name:
+        return ('Not found', 404)
+    return send_from_directory(journal_dir, cover_name)
 
 
 @bp.route('/thumbnails/<journal_id>/<path:filename>')
@@ -332,7 +344,12 @@ def thumbnail(journal_id: str, filename: str):
 def read_journal(journal_id: str):
     db = store()
     journal = db.get_journal(journal_id)
-    # Flatten fresh entries from all pages, keeping track of page origin.
+    if journal.get('cover_photo'):
+        journal['cover_url'] = url_for('journal.cover_asset', journal_id=journal_id)
+
+    # Flatten fresh entries from all pages, keeping track of page origin. This
+    # also lets the read-only reader summarize the date range without writing
+    # anything back to the journal directory.
     all_entries = []
     for page in journal['pages']:
         page_entries = page.get('entries') or []
@@ -354,8 +371,18 @@ def read_journal(journal_id: str):
 
     # Sort by date, fallback to page number.
     sorted_entries = sorted(all_entries, key=lambda e: (e.get('entry_date') or '9999-99-99', e.get('page_number') or 0))
+    dated_entries = [entry.get('entry_date') for entry in sorted_entries if entry.get('entry_date')]
+    date_range = ''
+    if dated_entries:
+        date_range = dated_entries[0] if dated_entries[0] == dated_entries[-1] else f'{dated_entries[0]} – {dated_entries[-1]}'
 
-    response = make_response(render_template('read_journal.html', journal=journal, entries=sorted_entries))
+    response = make_response(render_template(
+        'read_journal.html',
+        journal=journal,
+        entries=sorted_entries,
+        date_range=date_range,
+        dashboard_url=url_for('journal.dashboard'),
+    ))
     response.headers['Cache-Control'] = 'no-store, max-age=0'
     return response
 
@@ -363,4 +390,3 @@ def read_journal(journal_id: str):
 @bp.route('/healthz')
 def healthz():
     return jsonify({'ok': True})
-

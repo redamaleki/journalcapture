@@ -25,6 +25,25 @@ function closeModal(modal) {
   modal.setAttribute('aria-hidden', 'true');
 }
 
+function openLightbox(url) {
+  if (!url) return;
+  const modal = document.getElementById('page-lightbox');
+  const image = document.getElementById('page-lightbox-image');
+  if (!modal || !image) return;
+  image.src = url;
+  modal.classList.remove('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+}
+
+function closeLightbox() {
+  const modal = document.getElementById('page-lightbox');
+  const image = document.getElementById('page-lightbox-image');
+  if (!modal || !image) return;
+  modal.classList.add('hidden');
+  modal.setAttribute('aria-hidden', 'true');
+  image.src = '';
+}
+
 function initVisualPageSort() {
   const strip = document.getElementById('visual-page-strip');
   if (!strip || typeof Sortable === 'undefined') return;
@@ -106,6 +125,12 @@ document.addEventListener('click', (event) => {
 
   const modalClose = event.target.closest('[data-modal-close]');
   if (modalClose) closeModal(modalClose.closest('.modal'));
+
+  const lightboxTrigger = event.target.closest('[data-lightbox-src]');
+  if (lightboxTrigger) openLightbox(lightboxTrigger.dataset.lightboxSrc);
+
+  const lightboxClose = event.target.closest('[data-lightbox-close]');
+  if (lightboxClose) closeLightbox();
 
   const coverPicker = event.target.closest('[data-cover-picker]');
   if (coverPicker) {
@@ -211,4 +236,8 @@ window.addEventListener('beforeunload', (event) => {
   if (!formDirty) return;
   event.preventDefault();
   event.returnValue = '';
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeLightbox();
 });

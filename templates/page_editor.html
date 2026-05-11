@@ -27,7 +27,9 @@
 <section class="editor-layout">
   <section class="panel stack image-panel">
     {% if page.image_url %}
-      <a href="{{ page.image_url }}" target="_blank" class="main-image-link"><img class="main-image" src="{{ page.image_url }}" alt="Page image"></a>
+      <button type="button" class="main-image-link image-lightbox-trigger" data-lightbox-src="{{ page.image_url }}" aria-label="Open page image">
+        <img class="main-image" src="{{ page.image_url }}" alt="Page image">
+      </button>
     {% endif %}
     <form class="cover-upload-actions" method="post" enctype="multipart/form-data" action="{{ url_for('journal.replace_page_image', journal_id=journal.id, page_slug=page.slug) }}" data-cover-upload-form>
       <input type="file" name="page_image" accept="image/*" class="hidden" id="page-file-input">
@@ -140,7 +142,9 @@
     <div class="scrapbook-row clean-scroll">
       {% for scrapbook in page.scrapbook_items %}
       <div class="scrapbook-card compact-scrapbook-card">
-        <img src="{{ url_for('journal.page_asset', journal_id=journal.id, filename=scrapbook) }}" alt="Scrapbook item">
+        <button type="button" class="scrapbook-lightbox-trigger" data-lightbox-src="{{ url_for('journal.page_asset', journal_id=journal.id, filename=scrapbook) }}" aria-label="Open scrapbook item">
+          <img src="{{ url_for('journal.page_asset', journal_id=journal.id, filename=scrapbook) }}" alt="Scrapbook item">
+        </button>
         <form method="post" action="{{ url_for('journal.remove_scrapbook_item', journal_id=journal.id, page_slug=page.slug) }}">
           <input type="hidden" name="filename" value="{{ scrapbook }}">
           <button type="submit" class="danger small-btn">Remove</button>
@@ -152,6 +156,14 @@
     </div>
   </section>
 </section>
+
+<div id="page-lightbox" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" data-lightbox-close></div>
+  <div class="lightbox-shell" role="dialog" aria-modal="true" aria-label="Expanded journal image">
+    <button type="button" class="lightbox-close" data-lightbox-close aria-label="Close image viewer">×</button>
+    <img id="page-lightbox-image" class="lightbox-image" alt="Expanded journal image">
+  </div>
+</div>
 
 <div id="processing-modal" class="modal hidden" aria-hidden="true">
   <div class="modal-backdrop"></div>

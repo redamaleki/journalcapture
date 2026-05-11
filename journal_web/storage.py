@@ -118,12 +118,36 @@ class JournalStore:
         return journal_dir, pages_dir
 
     def list_pages(self, journal_id: str) -> list[dict[str, Any]]:
-        journal = self.get_journal_meta(journal_id)
+        journal_meta = self.get_journal_meta(journal_id)
         _, pages_dir = self.journal_paths(journal_id)
         pages = []
         for page_md in sorted(pages_dir.glob('page-*.md'), key=sort_key_page_name):
-            page = self.get_page(journal_id, page_md.stem)
-            pages.append(page)
+            meta, body = load_frontmatter(page_md)
+            pages.append(self._build_page_dict(journal_id, page_md.stem, meta, body, journal_meta))
+        return pages
+
+    def list_pages_basic(self, journal_id: str) -> list[dict[str, Any]]:
+        _, pages_dir = self.journal_paths(journal_id)
+        pages = []
+        for page_md in sorted(pages_dir.glob('page-*.md'), key=sort_key_page_name):
+            meta, _ = load_frontmatter(page_md)
+            entries = meta.get('entries') or []
+            if not entries:
+                legacy_entry_date = meta.get('entry_date', '')
+                if legacy_entry_date or meta.get('transcription') or meta.get('translation') or meta.get('notes'):
+                    entries = [{
+                        'entry_date': legacy_entry_date,
+                        'transcription': meta.get('transcription', ''),
+                        'translation': meta.get('translation', ''),
+                        'notes': meta.get('notes', ''),
+                    }]
+            primary_entry = entries[0] if entries else {}
+            pages.append({
+                'slug': page_md.stem,
+                'page_number': meta.get('page_number'),
+                'entry_date': primary_entry.get('entry_date', meta.get('entry_date', '')),
+                'entries': entries,
+            })
         return pages
 
     def get_journal_meta(self, journal_id: str) -> dict[str, Any]:
@@ -132,8 +156,13 @@ class JournalStore:
         return meta
 
     def get_page(self, journal_id: str, page_slug: str) -> dict[str, Any]:
-        journal_dir, pages_dir = self.journal_paths(journal_id)
+        _, pages_dir = self.journal_paths(journal_id)
         meta, body = load_frontmatter(pages_dir / f'{page_slug}.md')
+        journal_meta = self.get_journal_meta(journal_id)
+        return self._build_page_dict(journal_id, page_slug, meta, body, journal_meta)
+
+    def _build_page_dict(self, journal_id: str, page_slug: str, meta: dict[str, Any], body: str, journal_meta: dict[str, Any]) -> dict[str, Any]:
+        _, pages_dir = self.journal_paths(journal_id)
         main_image = pages_dir / f'{page_slug}.jpg'
         scrapbooks = meta.get('scrapbook_items', []) or []
         if main_image.exists():
@@ -172,7 +201,7 @@ class JournalStore:
             'image_url': image_url,
             'first_line': first_line(meta.get('transcription', '')),
             'status_done': sum(1 for flag in ['transcription_complete', 'translation_complete', 'tagged_complete'] if meta.get(flag)),
-            'journal_has_translation': bool(self.get_journal_meta(journal_id).get('has_translation')),
+            'journal_has_translation': bool(journal_meta.get('has_translation')),
             'scrapbook_urls': [f'/journals/{journal_id}/assets/{name}' for name in scrapbooks],
         }
 
@@ -315,13 +344,13 @@ class JournalStore:
         self.touch_journal(journal_id)
 
     def page_navigation(self, journal_id: str, page_slug: str) -> dict[str, Any]:
-        pages = self.list_pages(journal_id)
+        pages = self.list_pages_basic(journal_id)
         slugs = [p['slug'] for p in pages]
         if page_slug not in slugs:
             return {'prev': None, 'next': None, 'is_last': True, 'suggested_entry_date': date.today().isoformat()}
         idx = slugs.index(page_slug)
         prev_page = pages[idx - 1] if idx > 0 else None
-        suggested_entry_date = self.default_new_entry_date(journal_id, page_slug)
+        suggested_entry_date = self.default_new_entry_date_from_pages(pages, page_slug)
         return {
             'prev': prev_page,
             'next': pages[idx + 1] if idx < len(pages) - 1 else None,
@@ -330,7 +359,10 @@ class JournalStore:
         }
 
     def default_new_entry_date(self, journal_id: str, page_slug: str) -> str:
-        pages = self.list_pages(journal_id)
+        pages = self.list_pages_basic(journal_id)
+        return self.default_new_entry_date_from_pages(pages, page_slug)
+
+    def default_new_entry_date_from_pages(self, pages: list[dict[str, Any]], page_slug: str) -> str:
         slugs = [p['slug'] for p in pages]
         if page_slug not in slugs:
             return date.today().isoformat()

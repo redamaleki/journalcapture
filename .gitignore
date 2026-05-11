@@ -13,3 +13,4 @@ uploads/
 # Local runtime data
 data/
 app.log
+reader_app.log
