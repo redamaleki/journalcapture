@@ -29,6 +29,8 @@ Format: Valid JSON only. No prose. No explanations.
 
 Minimal metadata: Provide only date_text and transcription.
 
+If a visible written date heading starts an entry, copy it into date_text and also include that same written date line as the first line of the transcription for that entry.
+
 Preserve useful line breaks in transcription when they exist on the page.
 
 Return only valid JSON matching this exact shape:
@@ -36,7 +38,7 @@ Return only valid JSON matching this exact shape:
   "entries": [
     {
       "date_text": "string or null",
-      "transcription": "exact transcription"
+      "transcription": "exact transcription, including the visible written date heading as the first line when present"
     }
   ]
 }
