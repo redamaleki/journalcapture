@@ -55,6 +55,13 @@
       <div class="entry-chip-wrap">
         <span class="entry-chip">Entry {{ loop.index }}</span>
         {% if entry.confidence %}<span class="entry-date-chip">{{ entry.confidence }} confidence</span>{% endif %}
+        {% if entry.date_text %}
+          <span class="entry-date-chip">{{ entry.date_text }}</span>
+        {% elif entry.is_continuation_from_previous_page %}
+          <span class="entry-date-chip">Continuation from previous page</span>
+        {% else %}
+          <span class="entry-date-chip">No written date</span>
+        {% endif %}
       </div>
     </div>
     <label>Date<input type="date" name="entry_date" value="{{ entry.entry_date }}"></label>
@@ -64,8 +71,7 @@
       <input type="hidden" name="entry_translation" value="">
     {% endif %}
     <label>Transcription<textarea name="entry_transcription" rows="8">{{ entry.transcription }}</textarea></label>
-    <label>Comments<textarea name="entry_notes" rows="4">{% for note in entry.review_notes %}{{ note }}{% if not loop.last %}
-{% endif %}{% endfor %}</textarea></label>
+    <label>Comments<textarea name="entry_notes" rows="4">{{ (entry.review_notes or []) | join('\n') }}</textarea></label>
   </article>
   {% else %}
   <p class="muted">No entries returned.</p>

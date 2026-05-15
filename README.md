@@ -37,7 +37,9 @@ Environment variables supported:
 - `JOURNAL_DEBUG`
 - `TRANSCRIBE_TRANSLATE_ENABLED`
 - `OPENROUTER_API_KEY`
-- `OPENROUTER_MODEL`
+- `OPENROUTER_OCR_MODEL`
+- `OPENROUTER_TRANSLATION_MODEL`
+- `OPENROUTER_MODEL` (legacy alias for OCR)
 - `OPENROUTER_REASONING_MAX_TOKENS`
 - `OPENROUTER_IMAGE_MODEL`
 - `OPENROUTER_APP_NAME`
@@ -47,7 +49,12 @@ Defaults still support local workspace use if env vars are not set.
 
 ## Optional Transcribe and Translate add-in
 
-When enabled, page editor screens show a **Transcribe and Translate** button below the page image. The app sends the original page image to the configured OpenRouter transcription model with the previous-entry date/year context, presents returned entries for review/edit, and saves them only after the user accepts.
+When enabled, page editor screens show a **Transcribe and Translate** button below the page image. The app now uses a two-step OpenRouter flow:
+
+- OCR step: sends the original page image to the configured OCR model and returns only `date_text` plus verbatim `transcription`.
+- Translation step: sends the OCR JSON plus previous-entry date/year context to the configured translation model and returns keyed enrichment with `translation`, `normalized_date`, and `review_notes`.
+
+The app merges those two steps server-side, presents the combined entries for review/edit, and saves them only after the user accepts.
 
 If `OPENROUTER_IMAGE_MODEL` is configured and the checkbox is enabled, the app also creates a de-skewed/cropped review image after transcription. That image is not used for transcription. On the review screen the user can optionally replace the stored page image with the adjusted image.
 
@@ -56,6 +63,8 @@ Recommended Docker env:
 ```yaml
 TRANSCRIBE_TRANSLATE_ENABLED: "true"
 OPENROUTER_API_KEY: "your-key"
+OPENROUTER_OCR_MODEL: google/gemini-3-flash-preview
+OPENROUTER_TRANSLATION_MODEL: google/gemini-3.1-flash-lite
 OPENROUTER_MODEL: google/gemini-3-flash-preview
 OPENROUTER_REASONING_MAX_TOKENS: 2000
 OPENROUTER_IMAGE_MODEL: google/gemini-3.1-flash-image-preview
@@ -63,7 +72,10 @@ OPENROUTER_APP_NAME: Journal Capture
 OPENROUTER_SITE_URL: http://localhost:5000
 ```
 
-The app keeps the prompt/schema rigid server-side so the returned entries are normalized before review.
+Notes:
+- `OPENROUTER_MODEL` remains accepted as a legacy alias for OCR, but new deploys should set `OPENROUTER_OCR_MODEL` explicitly.
+- `OPENROUTER_REASONING_MAX_TOKENS` applies to the translation/enrichment step, not OCR.
+- The review screen still exposes raw request/response details for both OCR and translation.
 
 ## Docker
 Build:

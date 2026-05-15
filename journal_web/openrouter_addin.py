@@ -10,58 +10,38 @@ from pathlib import Path
 from typing import Any
 
 
-TRANSCRIBE_PROMPT = """
-You are processing a photographed or scanned journal page for family history research.
+OCR_PROMPT = """
+Role: Pure Vision-to-Text Engine.
 
-Return only valid JSON matching the requested schema. Do not wrap the result in an array.
+Task: Transcribe every glyph and character exactly as seen.
 
-Core rules:
-- Do not hallucinate. Transcription should be as close to exact as possible.
-- If text is unclear, mark it explicitly with `[unclear]` or a best guess followed by `[?]`.
-- Preserve original spelling, punctuation, capitalization, abbreviations, and meaningful line breaks in the transcription.
-- If a date is visibly written as an entry heading, include that written date line inside `transcription` exactly as written, and also copy it into `date_text`.
-- Translate to the true meaning of the writing if translating, not mechanically word-for-word.
-- Entries should be split by dates recorded on the page.
-- Do not invent dates, names, places, relationships, or events.
-- If the first entry on the page has no visible date and previous_date_text is provided, treat that first entry as a continuation: set date_source to carried_from_context and is_continuation_from_previous_page to true.
-- If journal_year is provided, use it to normalize visible month/day dates and carried-forward dates when otherwise ambiguous.
+Language Rule: Do not assume a primary language. If a word looks like "calc" or "Bible Bounce", transcribe it exactly as such regardless of the surrounding context.
 
-Return exactly this JSON object shape:
+No Reasoning: Do not verify dates, check calendars, infer missing context, or validate whether the language is correct.
+
+Verbatim Only: Transcribe exactly what is written. Do not correct spelling or grammar.
+
+Ignore Context: Do not link entries, summarize content, or interpret ambiguous words.
+
+Multiple Entry Detection: Scan the page for multiple distinct entries. If a page contains more than one entry, such as a new date header or a visual separator, return each as a separate object within the entries array. Do not merge text from different entries into a single transcription field.
+
+Format: Valid JSON only. No prose. No explanations.
+
+Minimal metadata: Provide only date_text and transcription.
+
+Preserve useful line breaks in transcription when they exist on the page.
+
+Return only valid JSON matching this exact shape:
 {
-  "status": "ok | needs_review | failed",
-  "language_detected": "string or null",
-  "image_assessment": {
-    "readability": "good | fair | poor",
-    "issues": ["string"],
-    "adjustment_used": false,
-    "adjustment_notes": "string"
-  },
-  "page_notes": ["string"],
-  "context_used": {
-    "previous_date_text": "string or null",
-    "journal_year": "string or null",
-    "notes": ["string"]
-  },
   "entries": [
     {
-      "date_text": "date as written, or null",
-      "normalized_date": "YYYY-MM-DD if confidently inferable, otherwise null",
-      "date_source": "visible_on_page | carried_from_context | inferred | unknown",
-      "is_continuation_from_previous_page": false,
-      "transcription": "exact transcription with useful line breaks; include the visible written date heading as the first line when present",
-      "translation": "meaning-preserving English translation, or null if already English/not requested",
-      "confidence": "high | medium | low",
-      "review_notes": ["string"]
+      "date_text": "string or null",
+      "transcription": "exact transcription"
     }
-  ],
-  "review": {
-    "summary": "brief human-readable summary",
-    "warnings": ["string"],
-    "unclear_words": ["string"],
-    "suggested_next_steps": ["string"]
-  }
+  ]
 }
 """.strip()
+
 
 IMAGE_ADJUST_PROMPT = (
     "De-skew the image and crop/shrink the canvas to the journal page only. "
@@ -74,7 +54,8 @@ IMAGE_ADJUST_PROMPT = (
 @dataclass
 class OpenRouterConfig:
     api_key: str
-    model: str
+    ocr_model: str
+    translation_model: str
     reasoning_max_tokens: int = 0
     image_model: str = ""
     app_name: str = "Journal Capture"
@@ -82,21 +63,26 @@ class OpenRouterConfig:
 
 
 def enabled() -> bool:
-    return bool(os.environ.get("OPENROUTER_API_KEY") and os.environ.get("OPENROUTER_MODEL"))
+    return bool(os.environ.get("OPENROUTER_API_KEY") and (os.environ.get("OPENROUTER_OCR_MODEL") or os.environ.get("OPENROUTER_MODEL")))
 
 
 def load_config() -> OpenRouterConfig:
     api_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
-    model = os.environ.get("OPENROUTER_MODEL", "").strip()
-    if not api_key or not model:
-        raise RuntimeError("Transcribe and Translate add-in is not configured. Set OPENROUTER_API_KEY and OPENROUTER_MODEL.")
+    ocr_model = (os.environ.get("OPENROUTER_OCR_MODEL") or os.environ.get("OPENROUTER_MODEL") or "google/gemini-3-flash-preview").strip()
+    translation_model = os.environ.get("OPENROUTER_TRANSLATION_MODEL", "google/gemini-3.1-flash-lite").strip()
+    if not api_key or not ocr_model or not translation_model:
+        raise RuntimeError(
+            "Transcribe and Translate add-in is not configured. "
+            "Set OPENROUTER_API_KEY, OPENROUTER_OCR_MODEL (or OPENROUTER_MODEL), and OPENROUTER_TRANSLATION_MODEL."
+        )
     try:
         reasoning_max_tokens = int(os.environ.get("OPENROUTER_REASONING_MAX_TOKENS", "0") or 0)
     except ValueError:
         reasoning_max_tokens = 0
     return OpenRouterConfig(
         api_key=api_key,
-        model=model,
+        ocr_model=ocr_model,
+        translation_model=translation_model,
         reasoning_max_tokens=reasoning_max_tokens,
         image_model=os.environ.get("OPENROUTER_IMAGE_MODEL", "").strip(),
         app_name=os.environ.get("OPENROUTER_APP_NAME", "Journal Capture"),
@@ -134,73 +120,275 @@ def _data_url(path: Path) -> str:
     return f"data:{mime};base64,{encoded}"
 
 
-def _parse_json_object(content: str) -> dict[str, Any]:
+def _parse_json_object(content: str) -> Any:
     try:
         parsed = json.loads(content)
     except json.JSONDecodeError:
+        fenced_start = content.find("```")
+        if fenced_start != -1:
+            fenced_end = content.find("```", fenced_start + 3)
+            if fenced_end != -1:
+                fenced_body = content[fenced_start + 3 : fenced_end]
+                if fenced_body.lstrip().startswith("json"):
+                    fenced_body = fenced_body.lstrip()[4:]
+                try:
+                    parsed = json.loads(fenced_body.strip())
+                except json.JSONDecodeError:
+                    parsed = None
+                if parsed is not None:
+                    if isinstance(parsed, list) and len(parsed) == 1 and isinstance(parsed[0], dict):
+                        parsed = parsed[0]
+                    if isinstance(parsed, (dict, list)):
+                        return parsed
         start = content.find("{")
         end = content.rfind("}")
         if start == -1 or end <= start:
-            raise
-        parsed = json.loads(content[start : end + 1])
+            array_start = content.find("[")
+            array_end = content.rfind("]")
+            if array_start != -1 and array_end > array_start:
+                parsed = json.loads(content[array_start : array_end + 1])
+            else:
+                raise ValueError(f"Model response was not parseable JSON. Response snippet: {content[:500]}")
+        else:
+            parsed = json.loads(content[start : end + 1])
     if isinstance(parsed, list) and len(parsed) == 1 and isinstance(parsed[0], dict):
         parsed = parsed[0]
-    if not isinstance(parsed, dict):
-        raise ValueError("Model response was not a JSON object.")
+    if not isinstance(parsed, (dict, list)):
+        raise ValueError(f"Model response was not a JSON object or array. Response snippet: {content[:500]}")
     return parsed
 
 
-def _normalize_entries(data: dict[str, Any]) -> list[dict[str, Any]]:
+def _normalize_ocr_result(parsed: Any) -> dict[str, Any]:
     entries = []
-    for entry in data.get("entries") or []:
+    if isinstance(parsed, list):
+        raw_entries = parsed
+    elif isinstance(parsed, dict):
+        raw_entries = parsed.get("entries") or []
+    else:
+        raw_entries = []
+    for entry in raw_entries:
         if not isinstance(entry, dict):
             continue
-        entries.append({
-            "date_text": entry.get("date_text") or "",
-            "entry_date": entry.get("normalized_date") or "",
-            "date_source": entry.get("date_source") or "unknown",
-            "is_continuation_from_previous_page": bool(entry.get("is_continuation_from_previous_page")),
-            "transcription": entry.get("transcription") or "",
-            "translation": entry.get("translation") or "",
-            "confidence": entry.get("confidence") or "",
-            "review_notes": entry.get("review_notes") or [],
-        })
-    return entries
+        entries.append(
+            {
+                "date_text": entry.get("date_text") or "",
+                "transcription": entry.get("transcription") or "",
+            }
+        )
+    return {"entries": entries}
 
 
-def transcribe_page(image_path: Path, previous_date_text: str = "", journal_year: str = "", include_translation: bool = True) -> dict[str, Any]:
+def _normalize_translation_result(parsed: Any) -> dict[str, dict[str, Any]]:
+    if isinstance(parsed, list):
+        source = {str(index): value for index, value in enumerate(parsed)}
+    elif isinstance(parsed, dict):
+        source = parsed.get("entries") if isinstance(parsed.get("entries"), dict) else parsed
+    else:
+        return {}
+    if not isinstance(source, dict):
+        return {}
+    normalized: dict[str, dict[str, Any]] = {}
+    for key, value in source.items():
+        if not isinstance(value, dict):
+            continue
+        raw_notes = value.get("review_notes")
+        if isinstance(raw_notes, list):
+            review_notes = [str(note) for note in raw_notes]
+        elif isinstance(raw_notes, str):
+            review_notes = [raw_notes] if raw_notes.strip() else []
+        elif raw_notes is None:
+            review_notes = []
+        else:
+            review_notes = [str(raw_notes)]
+        normalized[str(key)] = {
+            "translation": value.get("translation") or "",
+            "normalized_date": value.get("normalized_date") or "",
+            "review_notes": review_notes,
+        }
+    return normalized
+
+
+def _infer_date_source(index: int, date_text: str, previous_date_text: str, normalized_date: str) -> str:
+    if date_text:
+        return "visible_on_page"
+    if index == 0 and previous_date_text:
+        return "carried_from_context"
+    if normalized_date:
+        return "inferred"
+    return ""
+
+
+def _merge_entries(
+    ocr_entries: list[dict[str, Any]],
+    translation_enrichment: dict[str, dict[str, Any]],
+    *,
+    previous_date_text: str = "",
+) -> list[dict[str, Any]]:
+    merged = []
+    for index, entry in enumerate(ocr_entries):
+        enrich = translation_enrichment.get(str(index), {})
+        normalized_date = enrich.get("normalized_date") or ""
+        merged.append(
+            {
+                "date_text": entry.get("date_text") or "",
+                "entry_date": normalized_date,
+                "date_source": _infer_date_source(index, entry.get("date_text") or "", previous_date_text, normalized_date),
+                "is_continuation_from_previous_page": bool(index == 0 and not (entry.get("date_text") or "") and previous_date_text),
+                "transcription": entry.get("transcription") or "",
+                "translation": enrich.get("translation") or "",
+                "confidence": "",
+                "review_notes": enrich.get("review_notes") or [],
+            }
+        )
+    return merged
+
+
+def _combine_usage(*usages: Any) -> dict[str, Any]:
+    prompt_tokens = 0
+    completion_tokens = 0
+    total_tokens = 0
+    cost = 0.0
+    saw_cost = False
+    for usage in usages:
+        if not isinstance(usage, dict):
+            continue
+        prompt_tokens += int(usage.get("prompt_tokens") or 0)
+        completion_tokens += int(usage.get("completion_tokens") or 0)
+        total_tokens += int(usage.get("total_tokens") or 0)
+        if usage.get("cost") is not None:
+            try:
+                cost += float(usage.get("cost"))
+                saw_cost = True
+            except (TypeError, ValueError):
+                pass
+    return {
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": total_tokens,
+        "cost": cost if saw_cost else None,
+    }
+
+
+def _translation_prompt(previous_date_text: str = "", journal_year: str = "", extra_instructions: str = "") -> str:
+    parts = [
+        "You are translating already-transcribed journal entries for family history research.",
+        "Return only valid JSON.",
+        "Input JSON contains OCR/transcription results. Do not return transcription again.",
+        "Return a JSON object where each key is the zero-based index of the entry.",
+        "For each entry key, return only: translation, normalized_date, and review_notes.",
+        "translation should be a meaning-preserving English translation. If the transcription is already English, set translation to null.",
+        "Use journal_year to normalize visible month/day dates into YYYY-MM-DD when confident.",
+        "If the first entry has date_text null or empty and previous_date_text is provided, treat it as continuation from the previous page and use previous_date_text plus journal_year to produce normalized_date when you can do so confidently.",
+        "If you cannot confidently normalize a date, leave normalized_date null and explain briefly in review_notes.",
+        "If a stray number at the top of the transcription appears to be a page number rather than a date or meaningful content marker, do not add a review note about it.",
+        "Do not preserve source line breaks in translation unless the line break changes or clarifies meaning. Prefer natural prose paragraphs or sentences over line-for-line formatting.",
+        "Do not include any fields other than translation, normalized_date, and review_notes.",
+    ]
+    if previous_date_text or journal_year:
+        parts.append(
+            f"Context:\n- previous_date_text: {previous_date_text or 'not provided'}\n- journal_year: {journal_year or 'not provided'}\n"
+            "Use this only to understand ambiguous wording in the translation. Do not alter the transcription structure."
+        )
+    if extra_instructions:
+        parts.append(f"Extra test instructions for translation only:\n{extra_instructions}")
+    return "\n\n".join(parts)
+
+
+def transcribe_page(
+    image_path: Path,
+    previous_date_text: str = "",
+    journal_year: str = "",
+    include_translation: bool = True,
+) -> dict[str, Any]:
     config = load_config()
     source_data_url = _data_url(image_path)
-    context = (
-        f"Translation requested: {'yes' if include_translation else 'no'}.\n"
-        f"previous_date_text: {previous_date_text or 'not provided'}\n"
-        f"journal_year: {journal_year or 'not provided'}\n"
-        "Use the original uploaded image for transcription and translation."
-    )
-    payload: dict[str, Any] = {
-        "model": config.model,
-        "messages": [{
-            "role": "user",
-            "content": [
-                {"type": "text", "text": f"{TRANSCRIBE_PROMPT}\n\n{context}"},
-                {"type": "image_url", "image_url": {"url": source_data_url}},
-            ],
-        }],
+
+    ocr_payload: dict[str, Any] = {
+        "model": config.ocr_model,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": OCR_PROMPT},
+                    {"type": "image_url", "image_url": {"url": source_data_url}},
+                ],
+            }
+        ],
         "temperature": 0,
         "response_format": {"type": "json_object"},
     }
-    if config.reasoning_max_tokens > 0:
-        payload["reasoning"] = {"max_tokens": config.reasoning_max_tokens, "exclude": True}
 
-    raw = _post_openrouter(config, payload)
-    content = raw.get("choices", [{}])[0].get("message", {}).get("content", "")
-    data = _parse_json_object(content)
+    ocr_raw = _post_openrouter(config, ocr_payload)
+    ocr_content = ocr_raw.get("choices", [{}])[0].get("message", {}).get("content", "")
+    ocr_result = _normalize_ocr_result(_parse_json_object(ocr_content))
+    ocr_entries = ocr_result.get("entries") or []
+
+    translation_payload: dict[str, Any] | None = None
+    translation_raw: dict[str, Any] | None = None
+    translation_result: dict[str, Any] | None = None
+    translation_enrichment: dict[str, dict[str, Any]] = {}
+
+    if include_translation:
+        translation_payload = {
+            "model": config.translation_model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": _translation_prompt(previous_date_text, journal_year)},
+                        {"type": "text", "text": json.dumps(ocr_result)},
+                    ],
+                }
+            ],
+            "temperature": 0,
+            "response_format": {"type": "json_object"},
+        }
+        if config.reasoning_max_tokens > 0:
+            translation_payload["reasoning"] = {"max_tokens": config.reasoning_max_tokens, "exclude": True}
+        translation_raw = _post_openrouter(config, translation_payload)
+        translation_content = translation_raw.get("choices", [{}])[0].get("message", {}).get("content", "")
+        translation_result = _parse_json_object(translation_content)
+        translation_enrichment = _normalize_translation_result(translation_result)
+
+    merged_entries = _merge_entries(ocr_entries, translation_enrichment, previous_date_text=previous_date_text)
+
     return {
-        "model": config.model,
-        "reasoning": {"enabled": config.reasoning_max_tokens > 0, "max_tokens": config.reasoning_max_tokens or None, "exclude": True},
-        "usage": raw.get("usage"),
-        "data": data,
-        "entries": _normalize_entries(data),
+        "model": config.ocr_model,
+        "models": {
+            "ocr": config.ocr_model,
+            "translation": config.translation_model if include_translation else "",
+        },
+        "reasoning": {
+            "ocr": {"enabled": False},
+            "translation": {
+                "enabled": bool(include_translation and config.reasoning_max_tokens > 0),
+                "max_tokens": config.reasoning_max_tokens or None,
+                "exclude": True,
+            },
+        },
+        "usage": {
+            **_combine_usage(ocr_raw.get("usage"), (translation_raw or {}).get("usage")),
+            "ocr": ocr_raw.get("usage"),
+            "translation": (translation_raw or {}).get("usage"),
+        },
+        "steps": {
+            "ocr": {
+                "model": config.ocr_model,
+                "request": ocr_payload,
+                "result": ocr_result,
+                "rawContent": ocr_content,
+            },
+            "translation": {
+                "model": config.translation_model,
+                "request": translation_payload,
+                "result": translation_result,
+                "rawContent": translation_raw.get("choices", [{}])[0].get("message", {}).get("content", "") if translation_raw else "",
+            } if include_translation else None,
+        },
+        "data": {
+            "entries": merged_entries,
+        },
+        "entries": merged_entries,
     }
 
 
