@@ -25,6 +25,8 @@ Ignore Context: Do not link entries, summarize content, or interpret ambiguous w
 
 Multiple Entry Detection: Scan the page for multiple distinct entries. If a page contains more than one entry, such as a new date header or a visual separator, return each as a separate object within the entries array. Do not merge text from different entries into a single transcription field.
 
+Whitespace Rule: Do not emit tabs. Do not try to represent horizontal spacing, indentation, or blank areas with repeated spaces or tabs. Use ordinary text plus line breaks only where text actually appears on a new line.
+
 Format: Valid JSON only. No prose. No explanations.
 
 Minimal metadata: Provide only date_text and transcription.
@@ -59,6 +61,7 @@ class OpenRouterConfig:
     ocr_model: str
     translation_model: str
     reasoning_max_tokens: int = 0
+    ocr_max_tokens: int = 4000
     image_model: str = ""
     app_name: str = "Journal Capture"
     site_url: str = "http://localhost:5000"
@@ -81,11 +84,16 @@ def load_config() -> OpenRouterConfig:
         reasoning_max_tokens = int(os.environ.get("OPENROUTER_REASONING_MAX_TOKENS", "0") or 0)
     except ValueError:
         reasoning_max_tokens = 0
+    try:
+        ocr_max_tokens = int(os.environ.get("OPENROUTER_OCR_MAX_TOKENS", "4000") or 4000)
+    except ValueError:
+        ocr_max_tokens = 4000
     return OpenRouterConfig(
         api_key=api_key,
         ocr_model=ocr_model,
         translation_model=translation_model,
         reasoning_max_tokens=reasoning_max_tokens,
+        ocr_max_tokens=ocr_max_tokens,
         image_model=os.environ.get("OPENROUTER_IMAGE_MODEL", "").strip(),
         app_name=os.environ.get("OPENROUTER_APP_NAME", "Journal Capture"),
         site_url=os.environ.get("OPENROUTER_SITE_URL", "http://localhost:5000"),
@@ -122,9 +130,63 @@ def _data_url(path: Path) -> str:
     return f"data:{mime};base64,{encoded}"
 
 
+def _escape_json_string_control_chars(content: str) -> str:
+    escaped: list[str] = []
+    in_string = False
+    is_escaped = False
+
+    for char in content:
+        if in_string:
+            if is_escaped:
+                escaped.append(char)
+                is_escaped = False
+                continue
+            if char == "\\":
+                escaped.append(char)
+                is_escaped = True
+                continue
+            if char == '"':
+                escaped.append(char)
+                in_string = False
+                continue
+            if char == "\n":
+                escaped.append("\\n")
+                continue
+            if char == "\r":
+                escaped.append("\\r")
+                continue
+            if char == "\t":
+                escaped.append("\\t")
+                continue
+            if char == "\b":
+                escaped.append("\\b")
+                continue
+            if char == "\f":
+                escaped.append("\\f")
+                continue
+            if ord(char) < 0x20:
+                escaped.append(f"\\u{ord(char):04x}")
+                continue
+            escaped.append(char)
+            continue
+
+        escaped.append(char)
+        if char == '"':
+            in_string = True
+
+    return "".join(escaped)
+
+
+def _json_loads_with_sanitized_fallback(content: str) -> Any:
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        return json.loads(_escape_json_string_control_chars(content))
+
+
 def _parse_json_object(content: str) -> Any:
     try:
-        parsed = json.loads(content)
+        parsed = _json_loads_with_sanitized_fallback(content)
     except json.JSONDecodeError:
         fenced_start = content.find("```")
         if fenced_start != -1:
@@ -134,7 +196,7 @@ def _parse_json_object(content: str) -> Any:
                 if fenced_body.lstrip().startswith("json"):
                     fenced_body = fenced_body.lstrip()[4:]
                 try:
-                    parsed = json.loads(fenced_body.strip())
+                    parsed = _json_loads_with_sanitized_fallback(fenced_body.strip())
                 except json.JSONDecodeError:
                     parsed = None
                 if parsed is not None:
@@ -148,11 +210,11 @@ def _parse_json_object(content: str) -> Any:
             array_start = content.find("[")
             array_end = content.rfind("]")
             if array_start != -1 and array_end > array_start:
-                parsed = json.loads(content[array_start : array_end + 1])
+                parsed = _json_loads_with_sanitized_fallback(content[array_start : array_end + 1])
             else:
                 raise ValueError(f"Model response was not parseable JSON. Response snippet: {content[:500]}")
         else:
-            parsed = json.loads(content[start : end + 1])
+            parsed = _json_loads_with_sanitized_fallback(content[start : end + 1])
     if isinstance(parsed, list) and len(parsed) == 1 and isinstance(parsed[0], dict):
         parsed = parsed[0]
     if not isinstance(parsed, (dict, list)):
@@ -317,6 +379,7 @@ def transcribe_page(
             }
         ],
         "temperature": 0,
+        "max_tokens": config.ocr_max_tokens,
         "response_format": {"type": "json_object"},
     }
 
