@@ -1,4 +1,35 @@
-flask
-pyyaml
-pillow
-gunicorn
+# =============================================================================
+# Journal Capture - Python Dependencies
+# =============================================================================
+# For Docker builds and production:
+#   pip install -r requirements.txt
+#
+# For local development:
+#   python -m venv venv
+#   source venv/bin/activate
+#   pip install -r requirements.txt
+#
+# NOTE: This list is intentionally kept minimal. Most dependencies are
+# pulled in transitively by Flask. Only add packages here when you
+# explicitly import them in the application code.
+# =============================================================================
+
+# Core web framework
+flask>=3.0
+
+# YAML support (used for backup config)
+pyyaml>=6.0
+
+# Image processing (thumbnails, uploads, etc.)
+pillow>=10.0
+
+# Production WSGI server (used in Docker)
+gunicorn>=22.0
+
+# -----------------------------------------------------------------------------
+# Notes for maintainers / future agents:
+# - Do not add large numbers of packages here without a good reason.
+# - If you add a new direct import, add it to this file with a minimum version.
+# - For development-only tools (testing, linting, etc.), create a
+#   requirements-dev.txt instead of bloating this file.
+# -----------------------------------------------------------------------------
