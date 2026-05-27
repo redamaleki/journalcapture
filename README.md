@@ -77,31 +77,86 @@ Notes:
 - `OPENROUTER_REASONING_MAX_TOKENS` applies to the translation/enrichment step, not OCR.
 - The review screen still exposes raw request/response details for both OCR and translation.
 
-## Docker
-Build:
-```bash
-docker build -t journalapp .
+## Docker Deployment (Recommended)
+
+This is the primary and recommended way to run Journal Capture.
+
+#### Using Docker Compose
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/redamaleki/journalcapture.git
+   cd journalcapture
+   ```
+
+2. **Configure the application**
+
+   You have two options:
+
+   - **Option A (used in production by the maintainer):** Edit the `environment:` section directly inside `docker-compose.yml` with your actual values.
+   - **Option B:** Create a `.env` file:
+     ```bash
+     cp .env.example .env
+     ```
+     Then edit `.env` with your values. The `docker-compose.yml` is already set up to read from it.
+
+3. Start the application:
+   ```bash
+   docker compose up -d --build
+   ```
+
+The app will be available on the port defined in `docker-compose.yml` (default is port 5000).
+
+#### Changing the Port
+
+The port mapping is defined in `docker-compose.yml`. To change the port the app is exposed on, edit the `ports` section:
+
+```yaml
+ports:
+  - "5000:5000"   # Change the left number to use a different port on the host
 ```
 
-Run:
-```bash
-docker run -d \
-  --name journalapp \
-  -p 5000:5000 \
-  -e JOURNAL_SECRET_KEY=change-me \
-  -v /srv/journalcapture/data:/data \
-  journalapp
+For example, to run on port 8080 instead:
+```yaml
+ports:
+  - "8080:5000"
 ```
 
-Compose:
+After changing the port, restart the container:
 ```bash
-docker compose up -d --build
+docker compose up -d
 ```
 
-Recommended host-mounted storage:
-- `/srv/journalcapture/data/journals`
-- `/srv/journalcapture/data/.thumbnails`
-- `/srv/journalcapture/data/config/backup_config.yml`
+#### Recommended Volume Mount (Persistent Storage)
+
+For production use, it is strongly recommended to mount a host directory so your journal data survives container restarts and updates.
+
+In `docker-compose.yml`, use a volume mount like this:
+
+```yaml
+volumes:
+  - /srv/journalcapture/data:/data
+```
+
+Create the directory on the host first:
+```bash
+sudo mkdir -p /srv/journalcapture/data
+```
+
+The following subdirectories will be created inside the mounted volume:
+
+- `/srv/journalcapture/data/journals` — Your journal data and pages
+- `/srv/journalcapture/data/.thumbnails` — Generated thumbnails
+- `/srv/journalcapture/data/config/backup_config.yml` — Backup settings
+
+#### Configuration
+
+Most configuration is done through environment variables. You can set them either:
+
+- Directly in the `environment:` section of `docker-compose.yml`, or
+- In a `.env` file (see `.env.example` for all available options)
+
+Key variables include `JOURNAL_SECRET_KEY`, `TRANSCRIBE_TRANSLATE_ENABLED`, and the various `OPENROUTER_*` variables when using the AI transcription feature.
 
 ## HTTPS / trusted mobile browser access
 For best mobile browser behavior, especially camera flows, serve the app behind HTTPS.

@@ -7,6 +7,10 @@ instance/
 uploads/
 .env
 .env.*
+# Allow example/template env files (but still block real secrets)
+!.env.example
+!.env.sample
+!.env.template
 .pytest_cache/
 .DS_Store
 
