@@ -10,6 +10,9 @@
   --danger: #dc2626;
   --border: #dbe2f0;
 }
+.mobile-sticky-header { display: none; }
+.mobile-cover-row, #cover-form-mobile { display: none; }
+
 * { box-sizing: border-box; }
 body {
   margin: 0;
@@ -167,14 +170,10 @@ button.danger { background: var(--danger); }
 .journal-sidebar { position: sticky; top: 86px; max-height: calc(100vh - 102px); overflow: auto; }
 .journal-hero-panel { gap: 14px; }
 .journal-main-column { min-width: 0; }
-.journal-mobile-summary { display: none; }
+
 .cover-upload-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.journal-mobile-summary h1 { margin: 0; font-size: 1.15rem; }
+
 .mobile-description { margin: 4px 0 0; }
-.mobile-cover-row { display: flex; }
-.mobile-cover-preview, .mobile-cover-placeholder {
-  width: 100%; max-height: 180px; object-fit: cover; border-radius: 14px; border: 1px solid var(--border);
-}
 .page-card-list { display: grid; gap: 12px; }
 .page-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
 .compact-page-grid { align-items: start; }
@@ -230,8 +229,10 @@ button.danger { background: var(--danger); }
   .scrapbook-panel { order: 3; }
   .journal-shell { grid-template-columns: 1fr; }
   .journal-sidebar { position: static; display: none; }
-  .journal-mobile-summary {
-    display: block; position: sticky; top: 70px; z-index: 5; backdrop-filter: blur(10px); padding: 12px;
+  
+
+  .mobile-cover-row {
+    overflow: hidden;
   }
   .page-card-grid { grid-template-columns: 1fr; }
   .visual-page-strip {
@@ -242,24 +243,124 @@ button.danger { background: var(--danger); }
   .page-card-horizontal img { min-height: 180px; height: 180px; }
   .mobile-journal-actions > * { flex: 1 1 auto; }
 }
-@media (max-width: 760px) {
-  .entry-picker-row { grid-template-columns: 1fr; }
-  .entry-picker-row .button { width: 100%; }
-}
-@media (max-width: 640px) {
-  .site-header { align-items: flex-start; flex-direction: column; }
-  .site-nav { width: 100%; }
-  .site-nav > * { flex: 1 1 auto; }
-  .site-nav .button, .site-nav a, .site-nav button { justify-content: center; }
-  .editor-meta-bar { align-items: stretch; }
-  .page-number-field { max-width: none; }
-  .scrapbook-upload-form { width: 100%; }
-  .scrapbook-upload-form > * { flex: 1 1 auto; }
-  .modal { align-items: end; }
-  .modal-dialog { width: 100%; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
-  .container { padding: 12px; }
-  .card img, .placeholder { height: 150px; }
-}
+  /* Journal overview mobile sticky header - centered, mobile only */
+  .mobile-sticky-header {
+    display: block;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+    position: sticky;
+    top: 4px;
+    z-index: 5;
+    backdrop-filter: blur(12px);
+  }
+
+  .mobile-sticky-header .sticky-top-row {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .mobile-sticky-header h2 {
+    font-size: 0.95rem;
+    margin: 0;
+    line-height: 1.15;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  .mobile-sticky-header .primary-actions {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .mobile-sticky-header .primary-actions .button,
+  .mobile-sticky-header .primary-actions button {
+    padding: 5px 8px;
+    font-size: 0.78rem;
+    min-height: 28px;
+    white-space: nowrap;
+  }
+
+  .mobile-sticky-header .more-btn {
+    background: var(--accent-soft);
+    color: var(--accent);
+    border: none;
+    padding: 3px 7px;
+    font-size: 1rem;
+    line-height: 1;
+    border-radius: 8px;
+    min-height: 28px;
+  }
+
+  .mobile-sticky-header .secondary-actions {
+    display: none;
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
+    gap: 5px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .mobile-sticky-header .secondary-actions.show {
+    display: flex;
+  }
+
+  .mobile-sticky-header .secondary-actions .button,
+  .mobile-sticky-header .secondary-actions button {
+    font-size: 0.75rem;
+    padding: 4px 7px;
+    min-height: 26px;
+  }
+
+
+  /* Journal overview mobile sticky header - centered, mobile only */
+  .mobile-sticky-header {
+    display: block;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+    position: sticky;
+    top: 4px;
+    z-index: 5;
+    backdrop-filter: blur(12px);
+  }
+
+  
+
+  .mobile-sticky-header h2 {
+    font-size: 0.95rem;
+    margin: 0;
+    line-height: 1.15;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
 
 .grid-two {
   display: grid;
@@ -298,16 +399,47 @@ button.danger { background: var(--danger); }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-body.scrolled .journal-mobile-summary .mobile-cover-row {
-  display: none;
-}
-body.scrolled .journal-mobile-summary .mobile-description,
-body.scrolled .journal-mobile-summary .meta-row {
-  display: none;
-}
-body.scrolled .journal-mobile-summary {
-  padding: 8px 12px;
-}
-body.scrolled .journal-mobile-summary h1 {
-  font-size: 1rem;
+
+
+/* Mobile-only sticky header for journal overview */
+
+
+@media (max-width: 900px) {
+  .mobile-sticky-header {
+    display: block;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+    position: sticky;
+    top: 4px;
+    z-index: 5;
+    backdrop-filter: blur(12px);
+  }
+
+  
+
+  .mobile-sticky-header h2 {
+    font-size: 0.95rem;
+    margin: 0;
+    line-height: 1.15;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
 }

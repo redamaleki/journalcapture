@@ -9,7 +9,7 @@
   {% if nav.next %}
     <a class="button secondary nav-btn small-btn guarded-nav" href="{{ url_for('journal.edit_page', journal_id=journal.id, page_slug=nav.next.slug) }}">Next →</a>
   {% elif nav.is_last %}
-    <a class="button secondary nav-btn small-btn guarded-nav" href="{{ url_for('journal.view_journal', journal_id=journal.id) }}#add-pages-modal">＋ Add Page</a>
+    <a class="button secondary nav-btn small-btn guarded-nav" href="{{ url_for('journal.view_journal', journal_id=journal.id, next=url_for('journal.edit_page', journal_id=journal.id, page_slug=page.slug)) }}#add-pages-modal">＋ Add Page</a>
   {% endif %}
   <a class="button secondary small-btn guarded-nav" href="{{ url_for('journal.view_journal', journal_id=journal.id) }}">Journal Overview</a>
 {% endblock %}
@@ -43,7 +43,9 @@
       <form class="stack-sm transcribe-translate-form" method="post" action="{{ url_for('journal.transcribe_translate_preview', journal_id=journal.id, page_slug=page.slug) }}" data-processing-form>
         <input type="hidden" name="previous_date_text" value="{{ nav.suggested_entry_date or '' }}">
         <input type="hidden" name="journal_year" value="{{ (nav.suggested_entry_date or '')[:4] }}">
-        <button type="submit" class="small-btn">Transcribe and Translate</button>
+        <button type="submit" class="small-btn">
+          {% if journal.has_translation %}Transcribe and Translate{% else %}Transcribe{% endif %}
+        </button>
         <label class="inline-check"><input type="checkbox" name="create_adjusted_image"> Create de-skewed/cropped review image</label>
       </form>
       {% endif %}

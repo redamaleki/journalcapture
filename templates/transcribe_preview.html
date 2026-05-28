@@ -6,8 +6,16 @@
 {% block content %}
 <section class="panel stack">
   <div>
-    <h1>Review Transcription and Translation</h1>
-    <p class="muted">Review and edit the model output before accepting it into Page {{ page.page_number }}.</p>
+    <h1>
+      {% if journal.has_translation %}Review Transcription and Translation{% else %}Review Transcription{% endif %}
+    </h1>
+    <p class="muted">
+      {% if journal.has_translation %}
+        Review and edit the model output before accepting it into Page {{ page.page_number }}.
+      {% else %}
+        Review and edit the transcription before accepting it into Page {{ page.page_number }}.
+      {% endif %}
+    </p>
   </div>
 
   <div class="grid-two">

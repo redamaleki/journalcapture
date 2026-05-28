@@ -24,6 +24,7 @@ from .utils import (
     update_last_modified,
     valid_date,
     write_people,
+    _normalize_for_yaml,
 )
 
 
@@ -60,6 +61,16 @@ class JournalStore:
             'cover_photo': '',
             'created': now_iso_date(),
             'last_modified': now_iso_date(),
+            # Prompt tuning (advanced feature)
+            'advanced_prompt_tuning_enabled': False,
+            'ocr_settings': {
+                'custom_instructions': '',
+                'date_and_structure_hints': '',
+            },
+            'translation_settings': {
+                'custom_instructions': '',
+                'terminology_and_style_notes': '',
+            },
         }
         save_yaml_only(journal_dir / 'journal.md', meta)
         write_people(journal_dir / 'people.json', [])
@@ -110,6 +121,22 @@ class JournalStore:
         current, _ = load_frontmatter(journal_dir / 'journal.md')
         current.update(data)
         save_yaml_only(journal_dir / 'journal.md', update_last_modified(current))
+
+    def save_prompt_tuning(self, journal_id: str, enabled: bool, ocr_settings: dict, translation_settings: dict, prompt_tuning_description: str = "") -> None:
+        """Save the advanced prompt tuning settings for a journal (additive only)."""
+        data = {
+            'advanced_prompt_tuning_enabled': bool(enabled),
+            'ocr_settings': {
+                'custom_instructions': (ocr_settings or {}).get('custom_instructions', '').strip(),
+                'date_and_structure_hints': (ocr_settings or {}).get('date_and_structure_hints', '').strip(),
+            },
+            'translation_settings': {
+                'custom_instructions': (translation_settings or {}).get('custom_instructions', '').strip(),
+                'terminology_and_style_notes': (translation_settings or {}).get('terminology_and_style_notes', '').strip(),
+            },
+            'prompt_tuning_description': (prompt_tuning_description or '').strip(),
+        }
+        self.save_journal_meta(journal_id, data)
 
     def journal_paths(self, journal_id: str) -> tuple[Path, Path]:
         journal_dir = self.journals_dir / journal_id

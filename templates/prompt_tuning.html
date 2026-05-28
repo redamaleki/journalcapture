@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% block title %}Prompt Tuning · {{ journal.title }}{% endblock %}
+{% block content %}
+<div class="panel stack" style="max-width: 720px; margin: 0 auto;">
+  <div class="row-between wrap gap-sm">
+    <div>
+      <h2>Prompt Tuning</h2>
+      <p class="muted">{{ journal.title }}</p>
+    </div>
+    <a class="secondary small-btn" href="{{ url_for('journal.view_journal', journal_id=journal.id) }}">← Back to Journal</a>
+  </div>
+
+  <form method="post" class="stack">
+    <div class="panel stack">
+      <h3 style="margin: 0 0 4px;">OCR Settings</h3>
+
+      <label>Custom Instructions (OCR)
+        <textarea name="ocr_custom_instructions" rows="4" placeholder="Any special rules or style preferences for transcription on this journal...">{{ request.args.get('ocr_ci', ocr_settings.get('custom_instructions', '')) }}</textarea>
+      </label>
+
+      <label>Date & Structure Hints
+        <textarea name="ocr_date_and_structure_hints" rows="4" placeholder="How dates usually appear, entry separators, page layout notes, etc.">{{ request.args.get('ocr_ds', ocr_settings.get('date_and_structure_hints', '')) }}</textarea>
+      </label>
+    </div>
+
+    {% if journal.has_translation or journal.get('has_translation') %}
+    <div class="panel stack">
+      <h3 style="margin: 0 0 4px;">Translation Settings</h3>
+
+      <label>Custom Instructions (Translation)
+        <textarea name="translation_custom_instructions" rows="4" placeholder="Tone, formality, how to handle names, etc.">{{ request.args.get('trans_ci', translation_settings.get('custom_instructions', '')) }}</textarea>
+      </label>
+
+      <label>Terminology & Style Notes
+        <textarea name="translation_terminology_and_style_notes" rows="4" placeholder="Recurring terms, names, cultural references, preferred translations...">{{ request.args.get('trans_ts', translation_settings.get('terminology_and_style_notes', '')) }}</textarea>
+      </label>
+    </div>
+    {% endif %}
+
+    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+      <button type="submit" class="btn-success small-btn">Save Tuning Settings</button>
+      <a class="secondary small-btn" href="{{ url_for('journal.view_journal', journal_id=journal.id) }}">Cancel</a>
+    </div>
+  </form>
+
+  <hr style="margin: 20px 0; border-color: var(--border);">
+
+  <div class="panel stack">
+    <h3 style="margin-top: 0;">Help Me Tune</h3>
+    {% if journal.get('prompt_tuning_description') %}
+    <p class="muted" style="font-size: 0.85em;">
+      Last description used: <em>{{ journal.get('prompt_tuning_description') }}</em>
+    </p>
+    {% endif %}
+    <p class="muted">
+      Describe the journal (primary location, language(s), cultural context, recurring topics, etc.). 
+      The AI will suggest values for the four fields above.
+    </p>
+    <p class="muted" style="font-size: 0.85em; color: var(--text-muted);">
+      <strong>Note:</strong> Your journal's title and description will be sent to the AI along with what you write below.
+    </p>
+
+    <form method="post" action="{{ url_for('journal.prompt_tuning_help_me_tune', journal_id=journal.id) }}">
+      <label>
+        <textarea name="description" rows="5" placeholder="This journal is written in a mix of English and Spanish..." required>{{ journal.get('prompt_tuning_description', '') or '' }}</textarea>
+      </label>
+      <button type="submit" class="small-btn">Help Me Tune</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

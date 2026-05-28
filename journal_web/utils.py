@@ -28,8 +28,57 @@ def load_frontmatter(path: Path) -> tuple[dict[str, Any], str]:
     return data, ''
 
 
+def _normalize_for_yaml(value: Any) -> Any:
+    """Recursively normalize strings for safe YAML serialization.
+    Especially important for long OCR transcription text that often contains
+    literal \r\n, backslashes, and other characters that can confuse PyYAML's
+    default quoting heuristics.
+    """
+    if isinstance(value, str):
+        # Normalize newlines and common OCR escape artifacts
+        v = value.replace('\r\n', '\n').replace('\r', '\n')
+        v = v.replace('\\r\\n', '\n').replace('\\r', '\n').replace('\\n', '\n')
+        v = v.replace('\\"', '"')
+        # Collapse runs of backslashes (common from OCR of printed documents)
+        v = re.sub(r"\\{2,}", "\\\\", v)
+        # Remove stray line-continuation backslashes at end of lines
+        v = re.sub(r"\\\s*\n", " ", v)
+        return v
+    if isinstance(value, dict):
+        return {k: _normalize_for_yaml(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_normalize_for_yaml(item) for item in value]
+    return value
+
+
+def _get_robust_yaml_dumper():
+    """Return a SafeDumper that forces literal block style ('|') for any
+    string that is long, contains newlines, or contains backslashes.
+    This prevents PyYAML from emitting double-quoted scalars that can become
+    unparsable when the content has OCR artifacts.
+    """
+    def represent_str_block(dumper, data):
+        if '\n' in data or len(data) > 100 or '\\' in data:
+            # Use literal block style — always safe for multi-line / messy text
+            return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='|')
+        return dumper.represent_scalar('tag:yaml.org,2002:str', data)
+
+    class RobustDumper(yaml.SafeDumper):
+        pass
+
+    RobustDumper.add_representer(str, represent_str_block)
+    return RobustDumper
+
+
 def dump_frontmatter(data: dict[str, Any], body: str = '') -> str:
-    yaml_text = yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
+    normalized = _normalize_for_yaml(data)
+    yaml_text = yaml.dump(
+        normalized,
+        Dumper=_get_robust_yaml_dumper(),
+        sort_keys=False,
+        allow_unicode=True,
+        default_flow_style=False,
+    )
     content = f"---\n{yaml_text}---\n"
     if body:
         content += body.rstrip() + '\n'
@@ -41,7 +90,14 @@ def save_frontmatter(path: Path, data: dict[str, Any], body: str = '') -> None:
 
 
 def save_yaml_only(path: Path, data: dict[str, Any]) -> None:
-    yaml_text = yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
+    normalized = _normalize_for_yaml(data)
+    yaml_text = yaml.dump(
+        normalized,
+        Dumper=_get_robust_yaml_dumper(),
+        sort_keys=False,
+        allow_unicode=True,
+        default_flow_style=False,
+    )
     path.write_text(f"---\n{yaml_text}---\n", encoding='utf-8')
 
 

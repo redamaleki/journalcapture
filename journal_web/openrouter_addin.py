@@ -358,14 +358,77 @@ def _translation_prompt(previous_date_text: str = "", journal_year: str = "", ex
     return "\n\n".join(parts)
 
 
+
+def _build_ocr_second_pass_prompt(ocr_settings: dict | None, previous_date_text: str = "", journal_year: str = "") -> str:
+    """Lightweight second pass for pure OCR path: focus on dates, line breaks, and entry structure."""
+    base = """You are a careful journal editor. You are given raw OCR output from a vision model.
+
+Your job:
+- Normalize and extract dates where possible using the provided context.
+- Clean up line breaks: join lines that clearly belong to the same sentence/paragraph, but preserve intentional paragraph or entry breaks.
+- Improve entry splitting if multiple entries are present on the page.
+- Do not add, invent, or summarize any content. Stay extremely faithful to the original transcription.
+
+Return ONLY valid JSON in this exact shape:
+{
+  "entries": [
+    {
+      "date_text": "normalized or original visible date or null",
+      "transcription": "cleaned transcription with sensible line breaks"
+    }
+  ]
+}
+
+Use previous_date_text and journal_year only to help normalize ambiguous dates. Do not alter the actual written words.
+"""
+
+    parts = [base.strip()]
+
+    if previous_date_text or journal_year:
+        parts.append(f"Context from previous page / journal:\n- previous_date_text: {previous_date_text or 'none'}\n- journal_year: {journal_year or 'unknown'}")
+
+    if ocr_settings:
+        ci = (ocr_settings.get('custom_instructions') or '').strip()
+        hints = (ocr_settings.get('date_and_structure_hints') or '').strip()
+        if ci:
+            parts.append(f"Additional custom instructions for this journal:\n{ci}")
+        if hints:
+            parts.append(f"Date and structure hints for this journal:\n{hints}")
+
+    return "\n\n".join(parts)
+
+
 def transcribe_page(
     image_path: Path,
     previous_date_text: str = "",
     journal_year: str = "",
     include_translation: bool = True,
+    ocr_settings: dict | None = None,
+    translation_settings: dict | None = None,
 ) -> dict[str, Any]:
+    """
+    Run OCR (and optionally translation).
+
+    When advanced_prompt_tuning_enabled on the journal:
+    - ocr_settings and translation_settings are injected additively.
+    - For pure OCR-only path (include_translation=False): performs a second lightweight
+      call using the same OCR model for date normalization and structure cleanup.
+    """
     config = load_config()
     source_data_url = _data_url(image_path)
+
+    # Build OCR prompt, injecting tuning if provided (additive only)
+    ocr_text = OCR_PROMPT
+    if ocr_settings:
+        ci = (ocr_settings.get('custom_instructions') or '').strip()
+        hints = (ocr_settings.get('date_and_structure_hints') or '').strip()
+        extras = []
+        if ci:
+            extras.append(f"Additional custom instructions for this journal:\n{ci}")
+        if hints:
+            extras.append(f"Date and structure hints for this journal:\n{hints}")
+        if extras:
+            ocr_text = OCR_PROMPT + "\n\n" + "\n\n".join(extras)
 
     ocr_payload: dict[str, Any] = {
         "model": config.ocr_model,
@@ -373,7 +436,7 @@ def transcribe_page(
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": OCR_PROMPT},
+                    {"type": "text", "text": ocr_text},
                     {"type": "image_url", "image_url": {"url": source_data_url}},
                 ],
             }
@@ -388,19 +451,62 @@ def transcribe_page(
     ocr_result = _normalize_ocr_result(_parse_json_object(ocr_content))
     ocr_entries = ocr_result.get("entries") or []
 
+    # === Two-call path for pure "Transcribe" (OCR-only) ===
+    # Second lightweight call using same OCR model for dates + structure (per user request)
+    if not include_translation:
+        second_prompt = _build_ocr_second_pass_prompt(ocr_settings, previous_date_text, journal_year)
+        second_payload = {
+            "model": config.ocr_model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": second_prompt + "\n\nRaw OCR result from first pass:\n" + json.dumps(ocr_result),
+                }
+            ],
+            "temperature": 0,
+            "max_tokens": config.ocr_max_tokens,
+            "response_format": {"type": "json_object"},
+        }
+        try:
+            second_raw = _post_openrouter(config, second_payload)
+            second_content = second_raw.get("choices", [{}])[0].get("message", {}).get("content", "")
+            second_result = _normalize_ocr_result(_parse_json_object(second_content))
+            if second_result.get("entries"):
+                ocr_entries = second_result.get("entries")
+                ocr_result = second_result
+                # For pure OCR path, use date_text as entry_date fallback so the date field gets populated
+                for e in ocr_entries:
+                    if not e.get("entry_date") and e.get("date_text"):
+                        e["entry_date"] = e.get("date_text")
+        except Exception as e:
+            # If second pass fails, fall back to first OCR result silently
+            pass
+
     translation_payload: dict[str, Any] | None = None
     translation_raw: dict[str, Any] | None = None
     translation_result: dict[str, Any] | None = None
     translation_enrichment: dict[str, dict[str, Any]] = {}
 
     if include_translation:
+        trans_extra = ""
+        if translation_settings:
+            ci = (translation_settings.get('custom_instructions') or '').strip()
+            terms = (translation_settings.get('terminology_and_style_notes') or '').strip()
+            parts = []
+            if ci:
+                parts.append(f"Custom instructions for this journal:\n{ci}")
+            if terms:
+                parts.append(f"Terminology and style notes for this journal:\n{terms}")
+            if parts:
+                trans_extra = "\n\n".join(parts)
+
         translation_payload = {
             "model": config.translation_model,
             "messages": [
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": _translation_prompt(previous_date_text, journal_year)},
+                        {"type": "text", "text": _translation_prompt(previous_date_text, journal_year, extra_instructions=trans_extra)},
                         {"type": "text", "text": json.dumps(ocr_result)},
                     ],
                 }
@@ -489,3 +595,81 @@ def create_adjusted_image(image_path: Path) -> dict[str, Any] | None:
 def decode_data_url(data_url: str) -> bytes:
     prefix, encoded = data_url.split(",", 1)
     return base64.b64decode(encoded)
+
+
+# =============================================================================
+# Prompt Tuning Helper (for "Help Me Tune" feature)
+# =============================================================================
+
+def generate_prompt_tuning_suggestions(
+    title: str,
+    description: str,
+    user_description: str,
+) -> dict[str, str]:
+    """
+    Uses the translation model to suggest values for the four per-journal prompt tuning fields.
+    Returns a dict with keys:
+        ocr_custom_instructions, ocr_date_and_structure_hints,
+        translation_custom_instructions, translation_terminology_and_style_notes
+    """
+    config = load_config()
+
+    meta_prompt = f"""You are helping tune prompts for a personal journal digitization app.
+
+The user has a journal with the following context:
+- Title: {title or "(untitled)"}
+- Description: {description or "(none provided)"}
+
+User's additional description:
+{user_description}
+
+Your task: Suggest concise, useful values for these four fields. Return ONLY valid JSON with exactly these four keys (no extra text, no markdown):
+
+{{
+  "ocr_custom_instructions": "string or empty",
+  "ocr_date_and_structure_hints": "string or empty",
+  "translation_custom_instructions": "string or empty",
+  "translation_terminology_and_style_notes": "string or empty"
+}}
+
+Guidelines:
+- Keep suggestions short and practical (1-3 sentences max per field).
+- Focus on things that would actually improve OCR accuracy or translation quality for this specific journal.
+- If nothing useful can be suggested for a field, return an empty string for it.
+- Do not invent details that were not in the provided context.
+"""
+
+    payload = {
+        "model": config.translation_model,
+        "messages": [
+            {
+                "role": "user",
+                "content": meta_prompt
+            }
+        ],
+        "max_tokens": 800,
+        "temperature": 0.3,
+    }
+
+    raw = _post_openrouter(config, payload)
+    message = raw.get("choices", [{}])[0].get("message", {})
+    content = (message.get("content") or "").strip()
+
+    # Try to extract JSON
+    try:
+        # Remove any markdown code fences if present
+        if content.startswith("```"):
+            content = content.split("```", 2)[1] if "```" in content else content
+            if content.startswith("json"):
+                content = content[4:].strip()
+
+        parsed = json.loads(content)
+
+        return {
+            "ocr_custom_instructions": (parsed.get("ocr_custom_instructions") or "").strip(),
+            "ocr_date_and_structure_hints": (parsed.get("ocr_date_and_structure_hints") or "").strip(),
+            "translation_custom_instructions": (parsed.get("translation_custom_instructions") or "").strip(),
+            "translation_terminology_and_style_notes": (parsed.get("translation_terminology_and_style_notes") or "").strip(),
+        }
+    except Exception as e:
+        raise RuntimeError(f"Failed to parse tuning suggestions from model: {e}\n\nRaw response: {content[:500]}") from e

@@ -246,15 +246,6 @@ if (window.location.hash === '#add-pages-modal') {
   openModal('#add-pages-modal');
 }
 
-function updateScrolledState() {
-  // Hysteresis prevents mobile flicker when the sticky journal header changes
-  // height near the cutoff point: collapse after scrolling well past it, but
-  // don't expand again until nearly back at the top.
-  if (!mobileHeaderCollapsed && window.scrollY > 220) mobileHeaderCollapsed = true;
-  if (mobileHeaderCollapsed && window.scrollY < 60) mobileHeaderCollapsed = false;
-  document.body.classList.toggle('scrolled', mobileHeaderCollapsed);
-}
-
 function updateEntrySummary(details) {
   const summary = details?.querySelector('summary');
   if (summary) summary.textContent = details.open ? 'Collapse entry' : 'Expand entry';
@@ -264,9 +255,7 @@ function initEntrySummaries() {
   document.querySelectorAll('.entry-details').forEach(updateEntrySummary);
 }
 
-window.addEventListener('scroll', updateScrolledState, { passive: true });
 window.addEventListener('load', () => {
-  updateScrolledState();
   initVisualPageSort();
   initEntryNavigator();
   initEntrySummaries();
@@ -281,3 +270,14 @@ window.addEventListener('beforeunload', (event) => {
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') closeLightbox();
 });
+
+// Toggle for the compact "More" actions on journal overview mobile sticky header
+function toggleJournalMore(btn) {
+  const container = btn.closest('.mobile-sticky-header');
+  const secondary = container ? container.querySelector('#journal-secondary-actions') : null;
+  if (!secondary) return;
+
+  const isOpen = secondary.classList.toggle('show');
+  btn.textContent = isOpen ? '×' : '⋯';
+  btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+}

@@ -113,12 +113,26 @@ def upload_to_journal(journal_id: str):
     files = [f for f in request.files.getlist('images') if f and f.filename]
     if not files:
         flash('Choose at least one image to upload.', 'error')
-        return redirect(url_for('journal.view_journal', journal_id=journal_id))
+        return _redirect_after_upload(journal_id)
+
     created, errors = db.create_pages_from_uploads(journal_id, files)
     if created:
         flash(f'Uploaded {len(created)} page(s).', 'success')
     if errors:
         flash(f'{len(errors)} file(s) could not be uploaded. Try those images again in a smaller batch or with smaller files.', 'error')
+    return _redirect_after_upload(journal_id)
+
+
+def _redirect_after_upload(journal_id: str):
+    """Safely redirect after upload, preferring a 'next' param if it targets this journal."""
+    next_url = request.form.get('next') or request.args.get('next')
+
+    if next_url:
+        # Basic safety check: must be internal and for this journal
+        expected_prefix = f"/journals/{journal_id}"
+        if next_url.startswith(expected_prefix):
+            return redirect(next_url)
+
     return redirect(url_for('journal.view_journal', journal_id=journal_id))
 
 
@@ -203,7 +217,7 @@ def edit_page(journal_id: str, page_slug: str):
 @bp.route('/journals/<journal_id>/pages/<page_slug>/transcribe-translate/preview', methods=['POST'])
 def transcribe_translate_preview(journal_id: str, page_slug: str):
     if not (current_app.config.get('TRANSCRIBE_TRANSLATE_ENABLED') and openrouter_addin.enabled()):
-        flash('Transcribe and Translate add-in is not configured.', 'error')
+        flash('Transcribe add-in is not configured.', 'error')
         return redirect(url_for('journal.edit_page', journal_id=journal_id, page_slug=page_slug))
     db = store()
     journal = db.get_journal(journal_id, include_pages=False)
@@ -221,6 +235,8 @@ def transcribe_translate_preview(journal_id: str, page_slug: str):
             previous_date_text=previous_date_text,
             journal_year=journal_year,
             include_translation=bool(journal.get('has_translation')),
+            ocr_settings=journal.get('ocr_settings') if journal.get('advanced_prompt_tuning_enabled') else None,
+            translation_settings=journal.get('translation_settings') if journal.get('advanced_prompt_tuning_enabled') else None,
         )
         adjusted = openrouter_addin.create_adjusted_image(image_path) if create_adjusted else None
         adjusted_artifact_name = ''
@@ -275,7 +291,9 @@ def transcribe_translate_accept(journal_id: str, page_slug: str):
     db.apply_transcribed_entries(journal_id, page_slug, entries, adjusted_image_bytes=adjusted_bytes)
     if artifact_path and artifact_path.exists():
         artifact_path.unlink()
-    flash('Transcription and translation accepted.', 'success')
+    journal = db.get_journal(journal_id, include_pages=False)
+    action = "Transcription and translation" if journal.get('has_translation') else "Transcription"
+    flash(f'{action} accepted.', 'success')
     return redirect(url_for('journal.edit_page', journal_id=journal_id, page_slug=page_slug))
 
 
@@ -398,6 +416,109 @@ def read_journal(journal_id: str):
     ))
     response.headers['Cache-Control'] = 'no-store, max-age=0'
     return response
+
+
+
+# =============================================================================
+# Per-Journal Prompt Tuning (Advanced)
+# =============================================================================
+
+@bp.route('/journals/<journal_id>/prompt-tuning', methods=['GET', 'POST'])
+def prompt_tuning(journal_id: str):
+    db = store()
+    journal = db.get_journal(journal_id, include_pages=False)
+
+    if request.method == 'POST':
+        # Since the toggle is now only on the dashboard and the link only appears when enabled,
+        # saving from this page always keeps advanced enabled.
+        enabled = True
+
+        ocr_settings = {
+            'custom_instructions': request.form.get('ocr_custom_instructions', ''),
+            'date_and_structure_hints': request.form.get('ocr_date_and_structure_hints', ''),
+        }
+        translation_settings = {
+            'custom_instructions': request.form.get('translation_custom_instructions', ''),
+            'terminology_and_style_notes': request.form.get('translation_terminology_and_style_notes', ''),
+        }
+        tuning_desc = request.form.get('prompt_tuning_description', '') or request.form.get('description', '')
+
+        db.save_prompt_tuning(journal_id, enabled, ocr_settings, translation_settings, tuning_desc)
+        flash('Prompt tuning settings saved.', 'success')
+        return redirect(url_for('journal.prompt_tuning', journal_id=journal_id))
+
+    # GET: show current values
+    return render_template(
+        'prompt_tuning.html',
+        journal=journal,
+        ocr_settings=journal.get('ocr_settings', {}),
+        translation_settings=journal.get('translation_settings', {}),
+        advanced_enabled=journal.get('advanced_prompt_tuning_enabled', False),
+    )
+
+
+@bp.route('/journals/<journal_id>/prompt-tuning/help-me-tune', methods=['POST'])
+def prompt_tuning_help_me_tune(journal_id: str):
+    """Call the translation model to suggest values for the four tuning fields."""
+    db = store()
+    journal = db.get_journal(journal_id, include_pages=False)
+
+    user_description = request.form.get('description', '').strip()
+
+    title = journal.get('title', '')
+    existing_desc = journal.get('description', '')
+
+    try:
+        suggestions = openrouter_addin.generate_prompt_tuning_suggestions(
+            title=title,
+            description=existing_desc,
+            user_description=user_description,
+        )
+
+        # Save the description the user just entered for "Help me tune" so it persists
+        db.save_prompt_tuning(
+            journal_id,
+            journal.get('advanced_prompt_tuning_enabled', False),
+            journal.get('ocr_settings', {}),
+            journal.get('translation_settings', {}),
+            user_description
+        )
+
+        flash('Suggestions generated. Review and adjust below before saving.', 'success')
+
+        from urllib.parse import urlencode
+        params = urlencode({
+            'ocr_ci': suggestions.get('ocr_custom_instructions', ''),
+            'ocr_ds': suggestions.get('ocr_date_and_structure_hints', ''),
+            'trans_ci': suggestions.get('translation_custom_instructions', ''),
+            'trans_ts': suggestions.get('translation_terminology_and_style_notes', ''),
+        })
+        return redirect(url_for('journal.prompt_tuning', journal_id=journal_id) + '?' + params)
+
+    except Exception as exc:
+        flash(f'Could not generate suggestions: {exc}', 'error')
+        return redirect(url_for('journal.prompt_tuning', journal_id=journal_id))
+
+
+
+@bp.route('/journals/<journal_id>/toggle-advanced', methods=['POST'])
+def toggle_advanced_prompt_tuning(journal_id: str):
+    """Quick toggle for Advanced Prompt Tuning from the dashboard."""
+    db = store()
+    journal = db.get_journal(journal_id, include_pages=False)
+    current = bool(journal.get('advanced_prompt_tuning_enabled'))
+    new_state = not current
+
+    # Preserve existing settings
+    db.save_prompt_tuning(
+        journal_id,
+        new_state,
+        journal.get('ocr_settings', {}),
+        journal.get('translation_settings', {}),
+        journal.get('prompt_tuning_description', '')
+    )
+    flash(f'Advanced Prompt Tuning {"enabled" if new_state else "disabled"} for this journal.', 'success')
+    return redirect(request.referrer or url_for('journal.dashboard'))
 
 
 @bp.errorhandler(RequestEntityTooLarge)

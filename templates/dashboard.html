@@ -54,8 +54,20 @@
           </div>
         </div>
       </a>
-      <div class="card-footer" style="padding: 10px;">
+      <div class="card-footer" style="padding: 8px 10px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
         <a class="button btn-success small-btn" href="{{ url_for('journal.read_journal', journal_id=journal.id) }}">Read Journal</a>
+
+        <!-- Advanced Prompt Tuning toggle (immediate save) -->
+        <form method="post" action="{{ url_for('journal.toggle_advanced_prompt_tuning', journal_id=journal.id) }}" style="display: inline; margin: 0;">
+          <label style="display: flex; align-items: center; gap: 4px; font-size: 0.8em; cursor: pointer; user-select: none;">
+            <input type="checkbox" name="advanced" {% if journal.advanced_prompt_tuning_enabled %}checked{% endif %} onchange="this.form.submit()">
+            Advanced
+          </label>
+        </form>
+
+        {% if journal.advanced_prompt_tuning_enabled %}
+        <a class="button secondary small-btn" href="{{ url_for('journal.prompt_tuning', journal_id=journal.id) }}" style="font-size: 0.8em; padding: 2px 8px;">Prompt Tuning</a>
+        {% endif %}
       </div>
     </div>
   {% else %}
