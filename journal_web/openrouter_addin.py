@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -402,6 +403,33 @@ Use previous_date_text and journal_year only to help normalize ambiguous dates. 
     return "\n\n".join(parts)
 
 
+def _redact_image_data(obj: Any) -> Any:
+    """Recursively walk a structure and redact any base64 image data URLs.
+
+    Replaces strings matching data:image/...;base64,... with a safe placeholder
+    that includes mime type and approximate original size. This protects debug
+    fields (steps.*.request, messages, image_url.url, etc.) without touching
+    actual transcription/translation output.
+    """
+    if isinstance(obj, dict):
+        return {k: _redact_image_data(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_redact_image_data(item) for item in obj]
+    elif isinstance(obj, str):
+        if obj.startswith("data:image/") and ";base64," in obj:
+            match = re.match(r"data:(image/[^;]+);base64,(.+)", obj)
+            if match:
+                mime = match.group(1)
+                b64_part = match.group(2)
+                # Rough conversion: base64 is ~4/3 the size of binary
+                approx_bytes = int(len(b64_part) * 0.75)
+                return f"[redacted image data: {mime}, {approx_bytes} bytes]"
+            return "[redacted image data]"
+        return obj
+    else:
+        return obj
+
+
 def transcribe_page(
     image_path: Path,
     previous_date_text: str = "",
@@ -527,7 +555,7 @@ def transcribe_page(
 
     merged_entries = _merge_entries(ocr_entries, translation_enrichment, previous_date_text=previous_date_text)
 
-    return {
+    result = {
         "model": config.ocr_model,
         "models": {
             "ocr": config.ocr_model,
@@ -565,6 +593,7 @@ def transcribe_page(
         },
         "entries": merged_entries,
     }
+    return _redact_image_data(result)
 
 
 def create_adjusted_image(image_path: Path) -> dict[str, Any] | None:
