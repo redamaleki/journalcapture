@@ -149,7 +149,7 @@
               <input type="hidden" name="page_slug" value="{{ page.slug }}">
               <a class="visual-page-link" href="{{ url_for('journal.edit_page', journal_id=journal.id, page_slug=page.slug) }}">
                 {% if page.thumbnail_url %}
-                  <img src="{{ page.thumbnail_url }}" alt="Page {{ page.page_number or loop.index }}">
+                  <img src="{{ page.thumbnail_url }}" loading="lazy" alt="Page {{ page.page_number or loop.index }}">
                 {% else %}
                   <div class="placeholder">No image</div>
                 {% endif %}
@@ -169,7 +169,7 @@
         {% for page in pages %}
           <a class="card page-card page-card-horizontal" href="{{ url_for('journal.edit_page', journal_id=journal.id, page_slug=page.slug) }}">
             {% if page.thumbnail_url %}
-              <img src="{{ page.thumbnail_url }}" alt="Page {{ page.page_number or loop.index }}">
+              <img src="{{ page.thumbnail_url }}" loading="lazy" alt="Page {{ page.page_number or loop.index }}">
             {% endif %}
             <div class="card-body stack-sm">
               <div class="meta-row"><strong>Page {{ page.page_number or loop.index }}</strong><span>{{ page.entry_date or 'No date' }}</span></div>

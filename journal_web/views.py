@@ -139,11 +139,34 @@ def _redirect_after_upload(journal_id: str):
 @bp.route('/journals/<journal_id>')
 def view_journal(journal_id: str):
     db = store()
-    journal = db.get_journal(journal_id)
+    # Load journal meta + grouped_entries lightly, but use fast list_pages_basic for the page list
+    journal = db.get_journal(journal_id, include_pages=False)
     sort_mode = request.args.get('sort', 'date')
     view_mode = request.args.get('view', 'list')
-    pages = journal['pages']
+    pages = db.list_pages_basic(journal_id)
+
+    # Build entry_nav from the lightweight pages list
+    grouped = {}
+    for page in pages:
+        for entry in page.get('entries', []) or []:
+            entry_date = (entry.get('entry_date') or '').strip()
+            if entry_date:
+                grouped.setdefault(entry_date, []).append(page)
+                break
+
     entry_nav = []
+    for entry_date, entry_pages in sorted(grouped.items()):
+        if not entry_pages:
+            continue
+        entry_nav.append({
+            'date': entry_date,
+            'count': len(entry_pages),
+            'page_numbers': ', '.join(str(page.get('page_number') or '') for page in entry_pages),
+            'url': url_for('journal.edit_page', journal_id=journal_id, page_slug=entry_pages[0]['slug']),
+        })
+
+    if sort_mode == 'date':
+        pages = sorted(pages, key=lambda p: (p.get('entry_date') or '9999-99-99', p.get('page_number') or 999999))
     for entry_date, entry_pages in sorted(journal.get('grouped_entries', {}).items(), key=lambda item: item[0]):
         if not entry_pages:
             continue
