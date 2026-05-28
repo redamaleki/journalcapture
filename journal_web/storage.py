@@ -37,7 +37,7 @@ class JournalStore:
         journals = []
         for journal_dir in sorted(self.journals_dir.iterdir() if self.journals_dir.exists() else [], key=lambda p: p.name):
             if journal_dir.is_dir():
-                journals.append(self.get_journal(journal_dir.name, include_pages=True))
+                journals.append(self.get_journal(journal_dir.name, include_pages=False))
         return journals
 
     def delete_journal(self, journal_id: str) -> None:
@@ -80,41 +80,56 @@ class JournalStore:
         journal_dir = self.journals_dir / journal_id
         meta, _ = load_frontmatter(journal_dir / 'journal.md')
         people = read_people(journal_dir / 'people.json')
-        pages = self.list_pages(journal_id) if include_pages else []
-        grouped_entries = {}
-        for page in pages:
-            for entry in page.get('entries', []) or []:
-                entry_date = (entry.get('entry_date') or '').strip()
-                if entry_date:
-                    grouped_entries.setdefault(entry_date, []).append(page)
-                    break
-        cover_photo = meta.get('cover_photo', '')
-        cover_thumb = None
-        if cover_photo:
-            cover_path = journal_dir / cover_photo
-            if cover_path.exists():
-                cover_thumb = self.thumbnail_for(cover_path, journal_id, cover_photo)
-        first_thumb = cover_thumb or (pages[0]['thumbnail_url'] if pages else None)
-        complete_flags = 0
-        total_flags = 0
-        for page in pages:
-            checks = ['transcription_complete', 'tagged_complete']
-            if meta.get('has_translation'):
-                checks.append('translation_complete')
-            total_flags += len(checks)
-            complete_flags += sum(1 for flag in checks if page.get(flag))
-        progress = round((complete_flags / total_flags) * 100, 1) if total_flags else 0
-        return {
+
+        if include_pages:
+            pages = self.list_pages(journal_id)
+            grouped_entries = {}
+            for page in pages:
+                for entry in page.get('entries', []) or []:
+                    entry_date = (entry.get('entry_date') or '').strip()
+                    if entry_date:
+                        grouped_entries.setdefault(entry_date, []).append(page)
+                        break
+            cover_photo = meta.get('cover_photo', '')
+            cover_thumb = None
+            if cover_photo:
+                cover_path = journal_dir / cover_photo
+                if cover_path.exists():
+                    cover_thumb = self.thumbnail_for(cover_path, journal_id, cover_photo)
+            first_thumb = cover_thumb or (pages[0]['thumbnail_url'] if pages else None)
+            page_count = len(pages)
+        else:
+            pages = []
+            grouped_entries = {}
+            # Light path: still compute cover thumbnail + trust cached page_count
+            cover_photo = meta.get('cover_photo', '')
+            cover_thumb = None
+            if cover_photo:
+                cover_path = journal_dir / cover_photo
+                if cover_path.exists():
+                    cover_thumb = self.thumbnail_for(cover_path, journal_id, cover_photo)
+            first_thumb = cover_thumb
+            stored_count = meta.get('page_count')
+            if stored_count is not None and stored_count > 0:
+                page_count = stored_count
+            else:
+                _, pages_dir = self.journal_paths(journal_id)
+                actual_count = len(list(pages_dir.glob('page-*.md'))) if pages_dir.exists() else 0
+                page_count = actual_count
+                self.save_journal_meta(journal_id, {'page_count': page_count})
+
+        result = {
             'id': journal_id,
             'dir': journal_dir,
             **meta,
             'people': people,
-            'pages': pages,
             'grouped_entries': grouped_entries,
-            'page_count': len(pages),
+            'page_count': page_count,
             'thumbnail_url': first_thumb,
-            'progress_percent': progress,
         }
+        if include_pages:
+            result['pages'] = pages
+        return result
 
     def save_journal_meta(self, journal_id: str, data: dict[str, Any]) -> None:
         journal_dir = self.journals_dir / journal_id
