@@ -91,14 +91,15 @@ This is the primary and recommended way to run Journal Capture.
 
 2. **Configure the application**
 
-   You have two options:
+   The recommended way is to use a `.env` file. `docker-compose.yml` now declares `env_file: .env`, so Compose will read your `.env` on the host and inject the variables into the container.
 
-   - **Option A (used in production by the maintainer):** Edit the `environment:` section directly inside `docker-compose.yml` with your actual values.
-   - **Option B:** Create a `.env` file:
-     ```bash
-     cp .env.example .env
-     ```
-     Then edit `.env` with your values. The `docker-compose.yml` is already set up to read from it.
+   ```bash
+   cp .env.example .env
+   ```
+
+   Edit `.env` with your real values (at minimum `JOURNAL_SECRET_KEY`; also `OPENROUTER_API_KEY` etc. if using the AI transcription features).
+
+   Note: Because Docker sets the variables via `env_file`, the app's internal `.env` loader (which only sets keys that are *not* already in the environment) will correctly leave them alone.
 
 3. Start the application:
    ```bash

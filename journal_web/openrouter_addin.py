@@ -292,10 +292,14 @@ def _merge_entries(
     for index, entry in enumerate(ocr_entries):
         enrich = translation_enrichment.get(str(index), {})
         normalized_date = enrich.get("normalized_date") or ""
+        # Prefer translation enrichment's normalized date when present.
+        # For pure OCR path (no translation), fall back to entry_date that the
+        # second OCR pass may have set from date_text, or the raw date_text itself.
+        entry_date = normalized_date or entry.get("entry_date") or entry.get("date_text") or ""
         merged.append(
             {
                 "date_text": entry.get("date_text") or "",
-                "entry_date": normalized_date,
+                "entry_date": entry_date,
                 "date_source": _infer_date_source(index, entry.get("date_text") or "", previous_date_text, normalized_date),
                 "is_continuation_from_previous_page": bool(index == 0 and not (entry.get("date_text") or "") and previous_date_text),
                 "transcription": entry.get("transcription") or "",

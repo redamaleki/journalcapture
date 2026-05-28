@@ -442,6 +442,8 @@ def prompt_tuning(journal_id: str):
             'terminology_and_style_notes': request.form.get('translation_terminology_and_style_notes', ''),
         }
         tuning_desc = request.form.get('prompt_tuning_description', '') or request.form.get('description', '')
+        if not tuning_desc:
+            tuning_desc = journal.get('prompt_tuning_description', '')
 
         db.save_prompt_tuning(journal_id, enabled, ocr_settings, translation_settings, tuning_desc)
         flash('Prompt tuning settings saved.', 'success')
@@ -475,25 +477,24 @@ def prompt_tuning_help_me_tune(journal_id: str):
             user_description=user_description,
         )
 
-        # Save the description the user just entered for "Help me tune" so it persists
+        # Save suggestions directly as the current settings (as a draft the user can review/edit).
+        # This avoids brittle long query strings in the URL and browser history.
         db.save_prompt_tuning(
             journal_id,
             journal.get('advanced_prompt_tuning_enabled', False),
-            journal.get('ocr_settings', {}),
-            journal.get('translation_settings', {}),
+            {
+                'custom_instructions': suggestions.get('ocr_custom_instructions', ''),
+                'date_and_structure_hints': suggestions.get('ocr_date_and_structure_hints', ''),
+            },
+            {
+                'custom_instructions': suggestions.get('translation_custom_instructions', ''),
+                'terminology_and_style_notes': suggestions.get('translation_terminology_and_style_notes', ''),
+            },
             user_description
         )
 
-        flash('Suggestions generated. Review and adjust below before saving.', 'success')
-
-        from urllib.parse import urlencode
-        params = urlencode({
-            'ocr_ci': suggestions.get('ocr_custom_instructions', ''),
-            'ocr_ds': suggestions.get('ocr_date_and_structure_hints', ''),
-            'trans_ci': suggestions.get('translation_custom_instructions', ''),
-            'trans_ts': suggestions.get('translation_terminology_and_style_notes', ''),
-        })
-        return redirect(url_for('journal.prompt_tuning', journal_id=journal_id) + '?' + params)
+        flash('Suggestions generated and loaded below. Review and adjust, then Save Tuning Settings.', 'success')
+        return redirect(url_for('journal.prompt_tuning', journal_id=journal_id))
 
     except Exception as exc:
         flash(f'Could not generate suggestions: {exc}', 'error')

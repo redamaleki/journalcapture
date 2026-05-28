@@ -15,11 +15,11 @@
       <h3 style="margin: 0 0 4px;">OCR Settings</h3>
 
       <label>Custom Instructions (OCR)
-        <textarea name="ocr_custom_instructions" rows="4" placeholder="Any special rules or style preferences for transcription on this journal...">{{ request.args.get('ocr_ci', ocr_settings.get('custom_instructions', '')) }}</textarea>
+        <textarea name="ocr_custom_instructions" rows="4" placeholder="Any special rules or style preferences for transcription on this journal...">{{ ocr_settings.get('custom_instructions', '') }}</textarea>
       </label>
 
       <label>Date & Structure Hints
-        <textarea name="ocr_date_and_structure_hints" rows="4" placeholder="How dates usually appear, entry separators, page layout notes, etc.">{{ request.args.get('ocr_ds', ocr_settings.get('date_and_structure_hints', '')) }}</textarea>
+        <textarea name="ocr_date_and_structure_hints" rows="4" placeholder="How dates usually appear, entry separators, page layout notes, etc.">{{ ocr_settings.get('date_and_structure_hints', '') }}</textarea>
       </label>
     </div>
 
@@ -28,14 +28,16 @@
       <h3 style="margin: 0 0 4px;">Translation Settings</h3>
 
       <label>Custom Instructions (Translation)
-        <textarea name="translation_custom_instructions" rows="4" placeholder="Tone, formality, how to handle names, etc.">{{ request.args.get('trans_ci', translation_settings.get('custom_instructions', '')) }}</textarea>
+        <textarea name="translation_custom_instructions" rows="4" placeholder="Tone, formality, how to handle names, etc.">{{ translation_settings.get('custom_instructions', '') }}</textarea>
       </label>
 
       <label>Terminology & Style Notes
-        <textarea name="translation_terminology_and_style_notes" rows="4" placeholder="Recurring terms, names, cultural references, preferred translations...">{{ request.args.get('trans_ts', translation_settings.get('terminology_and_style_notes', '')) }}</textarea>
+        <textarea name="translation_terminology_and_style_notes" rows="4" placeholder="Recurring terms, names, cultural references, preferred translations...">{{ translation_settings.get('terminology_and_style_notes', '') }}</textarea>
       </label>
     </div>
     {% endif %}
+
+    <input type="hidden" name="prompt_tuning_description" value="{{ journal.get('prompt_tuning_description', '') }}">
 
     <div style="display: flex; gap: 8px; flex-wrap: wrap;">
       <button type="submit" class="btn-success small-btn">Save Tuning Settings</button>
