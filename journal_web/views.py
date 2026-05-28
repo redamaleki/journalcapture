@@ -139,14 +139,10 @@ def _redirect_after_upload(journal_id: str):
 @bp.route('/journals/<journal_id>')
 def view_journal(journal_id: str):
     db = store()
-    journal = db.get_journal(journal_id, include_pages=False)
+    journal = db.get_journal(journal_id)
     sort_mode = request.args.get('sort', 'date')
     view_mode = request.args.get('view', 'list')
-
-    # Always use full list_pages for the journal overview so we get thumbnails + status.
-    # The big perf win (avoiding 180 pages) is already applied on the dashboard via list_journals().
-    pages = db.list_pages(journal_id)
-
+    pages = journal['pages']
     entry_nav = []
     for entry_date, entry_pages in sorted(journal.get('grouped_entries', {}).items(), key=lambda item: item[0]):
         if not entry_pages:
@@ -157,7 +153,6 @@ def view_journal(journal_id: str):
             'page_numbers': ', '.join(str(page.get('page_number') or '') for page in entry_pages),
             'url': url_for('journal.edit_page', journal_id=journal_id, page_slug=entry_pages[0]['slug']),
         })
-
     if sort_mode == 'date':
         pages = sorted(pages, key=lambda p: (p.get('entry_date') or '9999-99-99', p.get('page_number') or 999999))
 
