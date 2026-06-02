@@ -58,19 +58,7 @@ The app merges those two steps server-side, presents the combined entries for re
 
 If `OPENROUTER_IMAGE_MODEL` is configured and the checkbox is enabled, the app also creates a de-skewed/cropped review image after transcription. That image is not used for transcription. On the review screen the user can optionally replace the stored page image with the adjusted image.
 
-Recommended Docker env:
-
-```yaml
-TRANSCRIBE_TRANSLATE_ENABLED: "true"
-OPENROUTER_API_KEY: "your-key"
-OPENROUTER_OCR_MODEL: google/gemini-3-flash-preview
-OPENROUTER_TRANSLATION_MODEL: google/gemini-3.1-flash-lite
-OPENROUTER_MODEL: google/gemini-3-flash-preview
-OPENROUTER_REASONING_MAX_TOKENS: 2000
-OPENROUTER_IMAGE_MODEL: google/gemini-3.1-flash-image-preview
-OPENROUTER_APP_NAME: Journal Capture
-OPENROUTER_SITE_URL: http://localhost:5000
-```
+For Docker, set these under `environment:` in `docker-compose.yml` (placeholders are already there—edit `OPENROUTER_API_KEY` and models as needed).
 
 Notes:
 - `OPENROUTER_MODEL` remains accepted as a legacy alias for OCR, but new deploys should set `OPENROUTER_OCR_MODEL` explicitly.
@@ -79,7 +67,7 @@ Notes:
 
 ## Docker Deployment (Recommended)
 
-This is the primary and recommended way to run Journal Capture.
+This is the primary and recommended way to run Journal Capture. **All configuration lives in `docker-compose.yml`**—no `.env` file is required.
 
 #### Using Docker Compose
 
@@ -91,17 +79,21 @@ This is the primary and recommended way to run Journal Capture.
 
 2. **Configure the application**
 
-   The recommended way is to use a `.env` file. `docker-compose.yml` now declares `env_file: .env`, so Compose will read your `.env` on the host and inject the variables into the container.
+   Edit `docker-compose.yml` on the host before first start:
 
+   - Set `JOURNAL_SECRET_KEY` to a long random string (required for production).
+   - Confirm the `volumes` path points at your persistent data directory (default `/srv/journalcapture/data`).
+   - If you use Transcribe & Translate, set `OPENROUTER_API_KEY` and adjust model names under `environment:`.
+   - To disable AI features, set `TRANSCRIBE_TRANSLATE_ENABLED: "false"` or leave `OPENROUTER_API_KEY` empty.
+
+   Compose injects the `environment:` block into the container. The app does not need a separate `.env` file for Docker.
+
+3. Create the data directory (if using the default volume path):
    ```bash
-   cp .env.example .env
+   sudo mkdir -p /srv/journalcapture/data
    ```
 
-   Edit `.env` with your real values (at minimum `JOURNAL_SECRET_KEY`; also `OPENROUTER_API_KEY` etc. if using the AI transcription features).
-
-   Note: Because Docker sets the variables via `env_file`, the app's internal `.env` loader (which only sets keys that are *not* already in the environment) will correctly leave them alone.
-
-3. Start the application:
+4. Start the application:
    ```bash
    docker compose up -d --build
    ```
@@ -152,12 +144,11 @@ The following subdirectories will be created inside the mounted volume:
 
 #### Configuration
 
-Most configuration is done through environment variables. You can set them either:
+For Docker, set environment variables in the `environment:` section of `docker-compose.yml`. That file is the single source of truth for production.
 
-- Directly in the `environment:` section of `docker-compose.yml`, or
-- In a `.env` file (see `.env.example` for all available options)
+Key variables: `JOURNAL_SECRET_KEY`, volume-related `JOURNAL_*_DIR` paths, `TRANSCRIBE_TRANSLATE_ENABLED`, and the `OPENROUTER_*` variables when using AI transcription.
 
-Key variables include `JOURNAL_SECRET_KEY`, `TRANSCRIBE_TRANSLATE_ENABLED`, and the various `OPENROUTER_*` variables when using the AI transcription feature.
+For **local development** with `python app.py`, you can optionally copy `.env.example` to `.env` instead of exporting variables in your shell. Docker deployments do not need `.env`.
 
 ## HTTPS / trusted mobile browser access
 For best mobile browser behavior, especially camera flows, serve the app behind HTTPS.
