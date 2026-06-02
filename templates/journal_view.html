@@ -1,1 +1,285 @@
-PLACEHOLDER_JOURNAL_VIEW
+{% extends 'base.html' %}
+{% block title %}{{ journal.title }} · Journal App{% endblock %}
+{% block header_actions %}
+  <!-- Suppress global Dashboard/Settings links on journal overview (mobile especially) -->
+{% endblock %}
+{% block content %}
+<style>
+/* Mobile-specific rules for journal overview */
+@media (max-width: 900px) {
+  header, .site-header, nav, .main-nav {
+    display: none !important;
+  }
+}
+@media (min-width: 901px) {
+}
+
+/* .mobile-sticky-header is mobile-only — hide on desktop */
+@media (min-width: 901px) {
+  .mobile-sticky-header {
+    display: none !important;
+  }
+}
+
+/* Hide the journal overview toolbar (view + sort controls) in the main column on desktop only */
+@media (min-width: 901px) {
+  .journal-main-column .view-controls-form {
+    display: none !important;
+  }
+}
+</style>
+<section class="journal-shell">
+  <aside class="panel stack journal-sidebar journal-hero-panel">
+    <div class="journal-hero-copy">
+      <h1>{{ journal.title }}</h1>
+      <p class="muted">{{ journal.description or 'No description yet.' }}</p>
+      <div style="margin-top: 15px; margin-bottom: 20px;">
+        <a class="button btn-success" style="width: 100%; text-align: center; font-size: 1.1em; padding: 12px;" href="{{ url_for('journal.read_journal', journal_id=journal.id) }}">Read Journal 📖</a>
+      </div>
+      <div class="meta-row wrap">
+        <span>Owner: {{ journal.owner or 'Unknown' }}</span>
+        <span>{{ journal.page_count }} page{% if journal.page_count != 1 %}s{% endif %}</span>
+      </div>
+    </div>
+
+    {% if journal.thumbnail_url %}
+      <button type="button" class="cover-lightbox-trigger" data-lightbox-src="{% if journal.cover_photo %}{{ url_for('journal.cover_asset', journal_id=journal.id) }}{% else %}{{ journal.thumbnail_url }}{% endif %}" aria-label="Open larger cover image">
+        <img class="journal-cover-preview large-cover" src="{{ journal.thumbnail_url }}" alt="{{ journal.title }} cover">
+      </button>
+    {% else %}
+      <div class="placeholder journal-cover-placeholder">No cover yet</div>
+    {% endif %}
+
+    <div class="actions-col wrap">
+      <a class="button secondary small-btn" href="{{ url_for('journal.add_person', journal_id=journal.id) }}">Manage People</a>
+      <button type="button" class="secondary small-btn" data-modal-open="#add-pages-modal">Add Pages</button>
+      <button type="button" class="secondary small-btn" data-modal-open="#rename-journal-modal">Rename Journal</button>
+      {% if journal.advanced_prompt_tuning_enabled %}
+      <a class="button secondary small-btn" href="{{ url_for('journal.prompt_tuning', journal_id=journal.id) }}">Prompt Tuning ★</a>
+      {% endif %}
+      <form method="post" action="{{ url_for('journal.backup_journal', journal_id=journal.id) }}">
+        <button type="submit" class="small-btn">Backup This Journal</button>
+      </form>
+      <form method="post" action="{{ url_for('journal.delete_journal', journal_id=journal.id) }}" onsubmit="return confirm('Delete this journal and all its pages?');">
+        <button type="submit" class="danger small-btn">Delete Journal</button>
+      </form>
+    </div>
+
+    <div class="meta-row wrap">
+      <form method="post" action="{{ url_for('journal.upload_cover', journal_id=journal.id) }}" enctype="multipart/form-data" class="cover-upload-actions" data-cover-upload-form>
+        <input type="file" name="cover_photo" accept="image/*" class="hidden" id="cover-file-input">
+        <input type="file" name="cover_photo" accept="image/*" capture="environment" class="hidden" id="cover-camera-input">
+        <button type="button" class="button secondary small-btn" data-cover-picker="cover-file-input">Choose cover image</button>
+        <button type="button" class="button secondary small-btn" data-cover-picker="cover-camera-input">Take cover photo</button>
+        <button type="submit" class="small-btn hidden" data-cover-save>Save Cover</button>
+      </form>
+    </div>
+  </aside>
+
+  <section class="journal-main-column stack">
+    <!-- Ultra-compact sticky header (mobile) - only Read + Add always visible -->
+    <div class="mobile-sticky-header" id="journal-sticky-header">
+      <div class="sticky-top-row">
+        <h2 title="{{ journal.title }}">{{ journal.title }}</h2>
+        <div class="primary-actions">
+          <a class="button secondary small-btn" href="{{ url_for('journal.dashboard') }}">Dashboard</a>
+          <a class="button btn-success small-btn" href="{{ url_for('journal.read_journal', journal_id=journal.id) }}">Read 📖</a>
+          <button type="button" class="secondary small-btn" data-modal-open="#add-pages-modal">Add 📄</button>
+          <button type="button" class="more-btn" onclick="toggleJournalMore(this)" aria-label="More actions">⋯</button>
+        </div>
+      </div>
+      <div class="secondary-actions" id="journal-secondary-actions">
+        <a class="button secondary small-btn" href="{{ url_for('journal.add_person', journal_id=journal.id) }}">People</a>
+        <button type="button" class="secondary small-btn" data-modal-open="#rename-journal-modal">Rename</button>
+        {% if journal.advanced_prompt_tuning_enabled %}
+        <a class="button secondary small-btn" href="{{ url_for('journal.prompt_tuning', journal_id=journal.id) }}">Prompt Tuning ★</a>
+        {% endif %}
+        <button type="button" class="text-link-btn" data-modal-open="#cover-modal">Cover</button>
+        <form method="post" action="{{ url_for('journal.backup_journal', journal_id=journal.id) }}" style="display:inline;">
+          <button type="submit" class="small-btn">Backup</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Cover image now scrolls away naturally (outside sticky header) -->
+    <div class="mobile-cover-row">
+      {% if journal.thumbnail_url %}
+        <button type="button" class="cover-lightbox-trigger" data-lightbox-src="{% if journal.cover_photo %}{{ url_for('journal.cover_asset', journal_id=journal.id) }}{% else %}{{ journal.thumbnail_url }}{% endif %}" aria-label="Open larger cover image">
+          <img class="mobile-cover-preview" src="{{ journal.thumbnail_url }}" alt="{{ journal.title }} cover">
+        </button>
+      {% else %}
+        <div class="placeholder mobile-cover-placeholder">No cover yet</div>
+      {% endif %}
+    </div>
+
+    <!-- Mobile cover upload form -->
+    <form id="cover-form-mobile" class="stack hidden compact-inline-form" method="post" enctype="multipart/form-data" action="{{ url_for('journal.upload_cover', journal_id=journal.id) }}" data-cover-upload-form>
+      <input type="file" name="cover_photo" accept="image/*" class="hidden" id="cover-file-input-mobile">
+      <input type="file" name="cover_photo" accept="image/*" capture="environment" class="hidden" id="cover-camera-input-mobile">
+      <div class="actions-row wrap">
+        <button type="button" class="secondary small-btn" data-cover-picker="cover-file-input-mobile">Choose cover image</button>
+        <button type="button" class="secondary small-btn" data-cover-picker="cover-camera-input-mobile">Take cover photo</button>
+        <button type="submit" class="small-btn hidden" data-cover-save>Save Cover</button>
+      </div>
+    </form>
+
+    <section class="panel stack">
+      <div class="row-between wrap gap-sm align-end">
+        <div>
+          <h2>Pages</h2>
+          <p class="muted">Browse pages by entry date in list view, or switch to visual scan order.</p>
+        </div>
+        <form method="get" class="view-controls-form row-between wrap gap-sm">
+          <input type="hidden" name="sort" value="{{ sort_mode }}">
+          <label>View
+            <select name="view" onchange="this.form.submit()">
+              <option value="visual" {% if view_mode == 'visual' %}selected{% endif %}>Visual View</option>
+              <option value="list" {% if view_mode == 'list' %}selected{% endif %}>List View</option>
+            </select>
+          </label>
+          <label>Sort by
+            <select name="sort" onchange="this.form.submit()">
+              <option value="page" {% if sort_mode == 'page' %}selected{% endif %}>Scan order</option>
+              <option value="date" {% if sort_mode == 'date' %}selected{% endif %}>Entry date</option>
+            </select>
+          </label>
+        </form>
+      </div>
+
+      {% if view_mode == 'visual' %}
+      <form method="post" action="{{ url_for('journal.reorder_pages', journal_id=journal.id) }}" class="stack" id="page-reorder-form">
+        <div class="row-between wrap gap-sm">
+          <p class="muted">Drag thumbnails to change physical scan order. Reordering never changes entry data.</p>
+          <button type="submit" class="small-btn">Save Order</button>
+        </div>
+        <section class="visual-page-strip" id="visual-page-strip">
+          {% for page in pages %}
+            <article class="card visual-page-tile" data-page-slug="{{ page.slug }}">
+              <input type="hidden" name="page_slug" value="{{ page.slug }}">
+              <a class="visual-page-link" href="{{ url_for('journal.edit_page', journal_id=journal.id, page_slug=page.slug) }}">
+                {% if page.thumbnail_url %}
+                  <img src="{{ page.thumbnail_url }}" loading="lazy" alt="Page {{ page.page_number or loop.index }}">
+                {% else %}
+                  <div class="placeholder">No image</div>
+                {% endif %}
+                <div class="card-body stack-sm">
+                  <div class="meta-row"><strong>Page {{ page.page_number or loop.index }}</strong><span>{{ page.entry_date or 'No date' }}</span></div>
+                  <p class="excerpt">{{ page.first_line or 'No transcription yet.' }}</p>
+                </div>
+              </a>
+            </article>
+          {% else %}
+            <div class="panel">No pages yet. Upload some inside this journal.</div>
+          {% endfor %}
+        </section>
+      </form>
+      {% else %}
+      <section class="page-card-grid compact-page-grid">
+        {% for page in pages %}
+          <a class="card page-card page-card-horizontal" href="{{ url_for('journal.edit_page', journal_id=journal.id, page_slug=page.slug) }}">
+            {% if page.thumbnail_url %}
+              <img src="{{ page.thumbnail_url }}" loading="lazy" alt="Page {{ page.page_number or loop.index }}">
+            {% endif %}
+            <div class="card-body stack-sm">
+              <div class="meta-row"><strong>Page {{ page.page_number or loop.index }}</strong><span>{{ page.entry_date or 'No date' }}</span></div>
+              {% if page.entries and page.entries|length > 1 %}<div class="meta-row"><span>Entries</span><span>{{ page.entries|length }}</span></div>{% endif %}
+              <p class="excerpt">{{ page.first_line or 'No transcription yet.' }}</p>
+            </div>
+          </a>
+        {% else %}
+          <div class="panel">No pages yet. Upload some inside this journal.</div>
+        {% endfor %}
+      </section>
+      {% endif %}
+    </section>
+
+    {% if entry_nav %}
+    <section class="panel stack entry-navigator" data-entry-navigator>
+      <div>
+        <h2>Entry Navigator</h2>
+        <p class="muted">Jump by date without scrolling through hundreds of page cards.</p>
+      </div>
+      <div class="entry-picker-row">
+        <label>Entry date
+          <select data-entry-select>
+            {% for entry in entry_nav %}
+              <option value="{{ loop.index0 }}">{{ entry.date }} · Page {{ entry.page_numbers }}{% if entry.count > 1 %} · {{ entry.count }} pages{% endif %}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <a class="button small-btn" data-entry-open href="{{ entry_nav[0].url }}">Open Entry</a>
+      </div>
+      <div class="timeline-control">
+        <input type="range" min="0" max="{{ entry_nav|length - 1 }}" value="0" step="1" data-entry-slider>
+        <div class="timeline-readout">
+          <strong data-entry-date>{{ entry_nav[0].date }}</strong>
+          <span class="muted" data-entry-pages>Page {{ entry_nav[0].page_numbers }}</span>
+        </div>
+      </div>
+      <script type="application/json" data-entry-nav-json>{{ entry_nav | tojson }}</script>
+    </section>
+    {% endif %}
+  </section>
+</section>
+
+<div id="page-lightbox" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" data-lightbox-close></div>
+  <div class="lightbox-shell" role="dialog" aria-modal="true" aria-label="Expanded journal image">
+    <button type="button" class="lightbox-close" data-lightbox-close aria-label="Close image viewer">×</button>
+    <img id="page-lightbox-image" class="lightbox-image" alt="Expanded journal image">
+  </div>
+</div>
+
+<div id="add-pages-modal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" data-modal-close></div>
+  <div class="modal-dialog panel stack" role="dialog" aria-modal="true" aria-labelledby="add-pages-title">
+    <div class="row-between wrap gap-sm">
+      <div>
+        <h2 id="add-pages-title">Add Pages</h2>
+        <p class="muted">Upload more page images into this journal.</p>
+      </div>
+      <button type="button" class="secondary small-btn" data-modal-close>Close</button>
+    </div>
+    <form class="stack" method="post" enctype="multipart/form-data" action="{{ url_for('journal.upload_to_journal', journal_id=journal.id) }}">
+      {% if request.args.get('next') %}
+        <input type="hidden" name="next" value="{{ request.args.get('next') }}">
+      {% endif %}
+      <div class="stack-sm">
+        <label>Page images<input type="file" name="images" accept="image/*" multiple></label>
+        <label>Take photo<input type="file" name="images" accept="image/*" capture="environment"></label>
+      </div>
+      <button type="submit" class="small-btn">Upload Pages</button>
+    </form>
+  </div>
+</div>
+
+<div id="rename-journal-modal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" data-modal-close></div>
+  <div class="modal-dialog panel stack" role="dialog" aria-modal="true" aria-labelledby="rename-journal-title">
+    <div class="row-between wrap gap-sm">
+      <h2 id="rename-journal-title">Rename Journal</h2>
+      <button type="button" class="secondary small-btn" data-modal-close>Close</button>
+    </div>
+    <form class="stack" method="post" action="{{ url_for('journal.rename_journal', journal_id=journal.id) }}">
+      <input type="hidden" name="next" value="{{ request.path }}">
+      <label>Title<input type="text" name="title" value="{{ journal.title }}" required></label>
+      <label>Description<input type="text" name="description" value="{{ journal.description or '' }}"></label>
+      <button type="submit" class="small-btn">Save Rename</button>
+    </form>
+  </div>
+</div>
+<div id="cover-modal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" data-modal-close></div>
+  <div class="modal-dialog panel stack" role="dialog" aria-modal="true" aria-labelledby="cover-modal-title">
+    <div class="row-between wrap gap-sm">
+      <h2 id="cover-modal-title">Change Cover Photo</h2>
+      <button type="button" class="secondary small-btn" data-modal-close>Close</button>
+    </div>
+
+    <form method="post" action="{{ url_for('journal.upload_cover', journal_id=journal.id) }}" enctype="multipart/form-data">
+      <input type="file" name="cover_photo" accept="image/*" required>
+      <button type="submit" class="button">Upload New Cover</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
