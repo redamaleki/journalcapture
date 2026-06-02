@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block title %}Organize scan order · {{ journal.title }}{% endblock %}
+{% block header_actions %}
+  <a class="button secondary small-btn" href="{{ url_for('journal.view_journal', journal_id=journal.id) }}">Back to journal</a>
+{% endblock %}
+{% block content %}
+<section class="panel stack">
+  <div>
+    <h1>Organize scan order</h1>
+    <p class="muted">{{ journal.title }}</p>
+    <p class="muted">Drag thumbnails to match the order you photographed the journal. This fixes upload mistakes (for example, scan 10 before scan 9). Entry text and dates are not changed.</p>
+  </div>
+
+  {% if pages %}
+  <form method="post" action="{{ url_for('journal.organize_scans', journal_id=journal.id) }}" class="stack" id="page-reorder-form">
+    <div class="row-between wrap gap-sm">
+      <p class="muted">{{ pages|length }} scan{% if pages|length != 1 %}s{% endif %} in this journal.</p>
+      <div class="actions-row">
+        <a class="button secondary small-btn" href="{{ url_for('journal.view_journal', journal_id=journal.id) }}">Cancel</a>
+        <button type="submit" class="small-btn">Save scan order</button>
+      </div>
+    </div>
+    <section class="visual-page-strip" id="visual-page-strip">
+      {% for page in pages %}
+        <article class="card visual-page-tile" data-page-slug="{{ page.slug }}">
+          <input type="hidden" name="page_slug" value="{{ page.slug }}">
+          <div class="visual-page-link">
+            {% if page.thumbnail_url %}
+              <img src="{{ page.thumbnail_url }}" loading="lazy" alt="Scan {{ page.page_number or loop.index }}">
+            {% else %}
+              <div class="placeholder">No image</div>
+            {% endif %}
+            <div class="card-body stack-sm">
+              <div class="meta-row"><strong>Scan {{ page.page_number or loop.index }}</strong><span>{{ page.entry_date or 'No date' }}</span></div>
+            </div>
+          </div>
+        </article>
+      {% endfor %}
+    </section>
+  </form>
+  {% else %}
+  <div class="panel">No pages yet. Add scans from the journal overview first.</div>
+  {% endif %}
+</section>
+{% endblock %}
