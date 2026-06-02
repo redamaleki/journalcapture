@@ -4,18 +4,29 @@ services:
     container_name: journalapp
     ports:
       - "5000:5000"
-    env_file:
-      - .env
     environment:
-      # These have safe container-internal defaults.
-      # Values from .env (via env_file) will take precedence.
+      # --- Core (edit before production) ---
+      JOURNAL_SECRET_KEY: change-me-to-a-long-random-string
       JOURNAL_HOST: 0.0.0.0
       JOURNAL_PORT: 5000
       JOURNAL_DEBUG: "false"
+      JOURNAL_MAX_UPLOAD_MB: "256"
+
+      # --- Data paths (match the volume mount below) ---
       JOURNAL_DATA_DIR: /data
       JOURNAL_JOURNALS_DIR: /data/journals
       JOURNAL_THUMBS_DIR: /data/.thumbnails
       JOURNAL_BACKUP_CONFIG_PATH: /data/config/backup_config.yml
+
+      # --- Transcribe & Translate (OpenRouter); disable or leave key empty to turn off ---
+      TRANSCRIBE_TRANSLATE_ENABLED: "true"
+      OPENROUTER_API_KEY: your-openrouter-api-key-here
+      OPENROUTER_OCR_MODEL: google/gemini-3-flash-preview
+      OPENROUTER_TRANSLATION_MODEL: google/gemini-3.1-flash-lite
+      OPENROUTER_REASONING_MAX_TOKENS: "2000"
+      # OPENROUTER_IMAGE_MODEL: google/gemini-3.1-flash-image-preview
+      OPENROUTER_APP_NAME: Journal Capture
+      OPENROUTER_SITE_URL: http://localhost:5000
     volumes:
       - /srv/journalcapture/data:/data
     restart: unless-stopped
