@@ -18,7 +18,7 @@ from flask import (
 )
 from werkzeug.exceptions import RequestEntityTooLarge
 
-from .storage import JournalStore
+from .storage import JournalStore, JOURNAL_MODE_COMPLETE, JOURNAL_MODE_EDITING, journal_is_editing
 from . import openrouter_addin
 
 bp = Blueprint('journal', __name__)
@@ -33,6 +33,17 @@ def first_uploaded_file(field_name: str):
         if uploaded and uploaded.filename:
             return uploaded
     return None
+
+
+def redirect_if_not_editing(journal_id: str):
+    journal = store().get_journal(journal_id, include_pages=False)
+    if journal_is_editing(journal):
+        return None
+    flash(
+        'This journal is complete. Reopen it for editing to add pages, reorder scans, or change images.',
+        'error',
+    )
+    return redirect(url_for('journal.view_journal', journal_id=journal_id))
 
 
 @bp.route('/')
@@ -77,6 +88,9 @@ def backup_all():
 
 @bp.route('/journals/<journal_id>/delete', methods=['POST'])
 def delete_journal(journal_id: str):
+    blocked = redirect_if_not_editing(journal_id)
+    if blocked:
+        return blocked
     store().delete_journal(journal_id)
     flash('Journal deleted.', 'success')
     return redirect(url_for('journal.dashboard'))
@@ -96,6 +110,9 @@ def create_journal():
 
 @bp.route('/journals/<journal_id>/rename', methods=['POST'])
 def rename_journal(journal_id: str):
+    blocked = redirect_if_not_editing(journal_id)
+    if blocked:
+        return blocked
     title = request.form.get('title', '').strip()
     description = request.form.get('description', '').strip()
     next_url = request.form.get('next') or request.referrer or url_for('journal.view_journal', journal_id=journal_id)
@@ -109,6 +126,9 @@ def rename_journal(journal_id: str):
 
 @bp.route('/journals/<journal_id>/upload', methods=['POST'])
 def upload_to_journal(journal_id: str):
+    blocked = redirect_if_not_editing(journal_id)
+    if blocked:
+        return blocked
     db = store()
     files = [f for f in request.files.getlist('images') if f and f.filename]
     if not files:
@@ -139,13 +159,10 @@ def _redirect_after_upload(journal_id: str):
 @bp.route('/journals/<journal_id>')
 def view_journal(journal_id: str):
     db = store()
-    # Load journal meta + grouped_entries lightly, but use fast list_pages_basic for the page list
     journal = db.get_journal(journal_id, include_pages=False)
-    sort_mode = request.args.get('sort', 'date')
-    view_mode = request.args.get('view', 'list')
+    sort_mode = request.args.get('sort', 'page')
     pages = db.list_pages_basic(journal_id)
 
-    # Build entry_nav from the lightweight pages list
     grouped = {}
     for page in pages:
         for entry in page.get('entries', []) or []:
@@ -167,32 +184,58 @@ def view_journal(journal_id: str):
 
     if sort_mode == 'date':
         pages = sorted(pages, key=lambda p: (p.get('entry_date') or '9999-99-99', p.get('page_number') or 999999))
-    for entry_date, entry_pages in sorted(journal.get('grouped_entries', {}).items(), key=lambda item: item[0]):
-        if not entry_pages:
-            continue
-        entry_nav.append({
-            'date': entry_date,
-            'count': len(entry_pages),
-            'page_numbers': ', '.join(str(page.get('page_number') or '') for page in entry_pages),
-            'url': url_for('journal.edit_page', journal_id=journal_id, page_slug=entry_pages[0]['slug']),
-        })
-    if sort_mode == 'date':
-        pages = sorted(pages, key=lambda p: (p.get('entry_date') or '9999-99-99', p.get('page_number') or 999999))
 
-    return render_template('journal_view.html', journal=journal, pages=pages, entry_nav=entry_nav, sort_mode=sort_mode, view_mode=view_mode)
+    return render_template(
+        'journal_view.html',
+        journal=journal,
+        pages=pages,
+        entry_nav=entry_nav,
+        sort_mode=sort_mode,
+    )
 
 
-@bp.route('/journals/<journal_id>/reorder', methods=['POST'])
-def reorder_pages(journal_id: str):
-    ordered_slugs = [slug for slug in request.form.getlist('page_slug') if slug]
-    if ordered_slugs:
-        store().reorder_pages(journal_id, ordered_slugs)
-        flash('Page order updated.', 'success')
-    return redirect(url_for('journal.view_journal', journal_id=journal_id, view='visual'))
+@bp.route('/journals/<journal_id>/organize-scans', methods=['GET', 'POST'])
+def organize_scans(journal_id: str):
+    blocked = redirect_if_not_editing(journal_id)
+    if blocked:
+        return blocked
+    db = store()
+    if request.method == 'POST':
+        ordered_slugs = [slug for slug in request.form.getlist('page_slug') if slug]
+        if ordered_slugs:
+            db.reorder_pages(journal_id, ordered_slugs)
+            flash('Scan order saved.', 'success')
+        return redirect(url_for('journal.view_journal', journal_id=journal_id))
+    journal = db.get_journal(journal_id, include_pages=False)
+    pages = db.list_pages_basic(journal_id)
+    return render_template('organize_scans.html', journal=journal, pages=pages)
+
+
+@bp.route('/journals/<journal_id>/mode/complete', methods=['POST'])
+def mark_journal_complete(journal_id: str):
+    blocked = redirect_if_not_editing(journal_id)
+    if blocked:
+        return blocked
+    store().set_journal_mode(journal_id, JOURNAL_MODE_COMPLETE)
+    flash('Journal marked complete. Pages and images are now view-only.', 'success')
+    return redirect(url_for('journal.view_journal', journal_id=journal_id))
+
+
+@bp.route('/journals/<journal_id>/mode/editing', methods=['POST'])
+def reopen_journal_editing(journal_id: str):
+    journal = store().get_journal(journal_id, include_pages=False)
+    if journal_is_editing(journal):
+        return redirect(url_for('journal.view_journal', journal_id=journal_id))
+    store().set_journal_mode(journal_id, JOURNAL_MODE_EDITING)
+    flash('Journal reopened for editing.', 'success')
+    return redirect(url_for('journal.view_journal', journal_id=journal_id))
 
 
 @bp.route('/journals/<journal_id>/cover', methods=['POST'])
 def upload_cover(journal_id: str):
+    blocked = redirect_if_not_editing(journal_id)
+    if blocked:
+        return blocked
     uploaded = first_uploaded_file('cover_photo')
     if uploaded:
         store().save_cover_photo(journal_id, uploaded)
@@ -206,6 +249,9 @@ def upload_cover(journal_id: str):
 def add_person(journal_id: str):
     db = store()
     if request.method == 'POST':
+        blocked = redirect_if_not_editing(journal_id)
+        if blocked:
+            return blocked
         name = request.form.get('name', '').strip()
         if name:
             db.add_person(journal_id, name, request.form.get('relation', '').strip(), request.form.get('notes', '').strip())
@@ -219,6 +265,9 @@ def add_person(journal_id: str):
 def edit_page(journal_id: str, page_slug: str):
     db = store()
     if request.method == 'POST':
+        blocked = redirect_if_not_editing(journal_id)
+        if blocked:
+            return blocked
         errors, new_slug = db.save_page(journal_id, page_slug, request.form)
         if errors:
             for err in errors:
@@ -234,12 +283,27 @@ def edit_page(journal_id: str, page_slug: str):
     journal = db.get_journal(journal_id, include_pages=False)
     page = db.get_page(journal_id, page_slug)
     nav = db.page_navigation(journal_id, page_slug)
-    transcribe_enabled = bool(current_app.config.get('TRANSCRIBE_TRANSLATE_ENABLED')) and openrouter_addin.enabled()
-    return render_template('page_editor.html', journal=journal, page=page, nav=nav, transcribe_enabled=transcribe_enabled)
+    transcribe_enabled = (
+        journal_is_editing(journal)
+        and bool(current_app.config.get('TRANSCRIBE_TRANSLATE_ENABLED'))
+        and openrouter_addin.enabled()
+    )
+    read_only = not journal_is_editing(journal)
+    return render_template(
+        'page_editor.html',
+        journal=journal,
+        page=page,
+        nav=nav,
+        transcribe_enabled=transcribe_enabled,
+        read_only=read_only,
+    )
 
 
 @bp.route('/journals/<journal_id>/pages/<page_slug>/transcribe-translate/preview', methods=['POST'])
 def transcribe_translate_preview(journal_id: str, page_slug: str):
+    blocked = redirect_if_not_editing(journal_id)
+    if blocked:
+        return blocked
     if not (current_app.config.get('TRANSCRIBE_TRANSLATE_ENABLED') and openrouter_addin.enabled()):
         flash('Transcribe add-in is not configured.', 'error')
         return redirect(url_for('journal.edit_page', journal_id=journal_id, page_slug=page_slug))
@@ -286,6 +350,9 @@ def transcribe_translate_preview(journal_id: str, page_slug: str):
 
 @bp.route('/journals/<journal_id>/pages/<page_slug>/transcribe-translate/accept', methods=['POST'])
 def transcribe_translate_accept(journal_id: str, page_slug: str):
+    blocked = redirect_if_not_editing(journal_id)
+    if blocked:
+        return blocked
     db = store()
     entries = []
     dates = request.form.getlist('entry_date')
@@ -323,6 +390,9 @@ def transcribe_translate_accept(journal_id: str, page_slug: str):
 
 @bp.route('/journals/<journal_id>/pages/<page_slug>/autosave', methods=['POST'])
 def autosave_page(journal_id: str, page_slug: str):
+    blocked = redirect_if_not_editing(journal_id)
+    if blocked:
+        return blocked
     db = store()
     errors, new_slug = db.save_page(journal_id, page_slug, request.form)
     page = db.get_page(journal_id, new_slug)
@@ -334,6 +404,9 @@ def autosave_page(journal_id: str, page_slug: str):
 
 @bp.route('/journals/<journal_id>/pages/<page_slug>/delete', methods=['POST'])
 def delete_page(journal_id: str, page_slug: str):
+    blocked = redirect_if_not_editing(journal_id)
+    if blocked:
+        return blocked
     db = store()
     nav = db.page_navigation(journal_id, page_slug)
     db.delete_page(journal_id, page_slug)
@@ -345,6 +418,9 @@ def delete_page(journal_id: str, page_slug: str):
 
 @bp.route('/journals/<journal_id>/pages/<page_slug>/image', methods=['POST'])
 def replace_page_image(journal_id: str, page_slug: str):
+    blocked = redirect_if_not_editing(journal_id)
+    if blocked:
+        return blocked
     uploaded = first_uploaded_file('page_image')
     if uploaded:
         store().replace_page_image(journal_id, page_slug, uploaded)
@@ -356,6 +432,9 @@ def replace_page_image(journal_id: str, page_slug: str):
 
 @bp.route('/journals/<journal_id>/pages/<page_slug>/scrapbook', methods=['POST'])
 def add_scrapbook_item(journal_id: str, page_slug: str):
+    blocked = redirect_if_not_editing(journal_id)
+    if blocked:
+        return blocked
     uploaded = request.files.get('scrapbook_image')
     if uploaded and uploaded.filename:
         store().add_scrapbook_item(journal_id, page_slug, uploaded)
@@ -365,6 +444,9 @@ def add_scrapbook_item(journal_id: str, page_slug: str):
 
 @bp.route('/journals/<journal_id>/pages/<page_slug>/scrapbook/remove', methods=['POST'])
 def remove_scrapbook_item(journal_id: str, page_slug: str):
+    blocked = redirect_if_not_editing(journal_id)
+    if blocked:
+        return blocked
     filename = request.form.get('filename', '')
     store().remove_scrapbook_item(journal_id, page_slug, filename)
     flash('Scrapbook item removed.', 'success')
@@ -453,8 +535,9 @@ def prompt_tuning(journal_id: str):
     journal = db.get_journal(journal_id, include_pages=False)
 
     if request.method == 'POST':
-        # Since the toggle is now only on the dashboard and the link only appears when enabled,
-        # saving from this page always keeps advanced enabled.
+        blocked = redirect_if_not_editing(journal_id)
+        if blocked:
+            return blocked
         enabled = True
 
         ocr_settings = {
@@ -486,6 +569,9 @@ def prompt_tuning(journal_id: str):
 @bp.route('/journals/<journal_id>/prompt-tuning/help-me-tune', methods=['POST'])
 def prompt_tuning_help_me_tune(journal_id: str):
     """Call the translation model to suggest values for the four tuning fields."""
+    blocked = redirect_if_not_editing(journal_id)
+    if blocked:
+        return blocked
     db = store()
     journal = db.get_journal(journal_id, include_pages=False)
 
@@ -529,6 +615,9 @@ def prompt_tuning_help_me_tune(journal_id: str):
 @bp.route('/journals/<journal_id>/toggle-advanced', methods=['POST'])
 def toggle_advanced_prompt_tuning(journal_id: str):
     """Quick toggle for Advanced Prompt Tuning from the dashboard."""
+    blocked = redirect_if_not_editing(journal_id)
+    if blocked:
+        return blocked
     db = store()
     journal = db.get_journal(journal_id, include_pages=False)
     current = bool(journal.get('advanced_prompt_tuning_enabled'))
