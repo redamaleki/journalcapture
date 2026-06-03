@@ -13,7 +13,6 @@ Local-first journal digitization web app built with Flask, using flat files only
 - Backup settings and one-click journal/all backup to a mounted share path
 - Docker-ready deployment with host-mounted storage support
 - Optional OpenRouter-powered Transcribe and Translate add-in with review/accept workflow
-- **Editing vs complete** journal modes with scan-order organization (see `docs/journal-modes-and-scan-order.md`)
 
 ## Local development
 ```bash
