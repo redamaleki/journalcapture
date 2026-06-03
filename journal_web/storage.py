@@ -194,4 +194,33 @@ class JournalStore:
         _, pages_dir = self.journal_paths(journal_id)
         pages = []
         for page_md in sorted(pages_dir.glob('page-*.md'), key=sort_key_page_name):
-            meta, _ = load_frontmatter(page_
+            meta, _ = load_frontmatter(page_md)
+            entries = meta.get('entries') or []
+            if not entries:
+                legacy_entry_date = meta.get('entry_date', '')
+                if legacy_entry_date or meta.get('transcription') or meta.get('translation') or meta.get('notes'):
+                    entries = [{
+                        'entry_date': legacy_entry_date,
+                        'transcription': meta.get('transcription', ''),
+                        'translation': meta.get('translation', ''),
+                        'notes': meta.get('notes', ''),
+                    }]
+            primary_entry = entries[0] if entries else {}
+            # Generate thumbnail so the template can render images
+            main_image = pages_dir / f'{page_md.stem}.jpg'
+            if main_image.exists():
+                thumb_url = self.thumbnail_for(main_image, journal_id, main_image.name)
+            else:
+                thumb_url = None
+
+            pages.append({
+                'slug': page_md.stem,
+                'page_number': meta.get('page_number'),
+                'entry_date': primary_entry.get('entry_date', meta.get('entry_date', '')),
+                'entries': entries,
+                'thumbnail_url': thumb_url,
+                'first_line': first_line(primary_entry.get('transcription', '')),
+            })
+        return pages
+
+    def get_journal_meta(self, journal_id: str) -> dict[str, A
