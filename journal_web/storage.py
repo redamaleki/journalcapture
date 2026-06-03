@@ -129,4 +129,98 @@ class JournalStore:
                 page_count = stored_count
             else:
                 _, pages_dir = self.journal_paths(journal_id)
-     
+                actual_count = len(list(pages_dir.glob('page-*.md'))) if pages_dir.exists() else 0
+                page_count = actual_count
+                self.save_journal_meta(journal_id, {'page_count': page_count})
+
+        result = {
+            'id': journal_id,
+            'dir': journal_dir,
+            **meta,
+            'mode': normalize_journal_mode(meta),
+            'is_editing': journal_is_editing(meta),
+            'people': people,
+            'grouped_entries': grouped_entries,
+            'page_count': page_count,
+            'thumbnail_url': first_thumb,
+        }
+        if include_pages:
+            result['pages'] = pages
+        return result
+
+    def save_journal_meta(self, journal_id: str, data: dict[str, Any]) -> None:
+        journal_dir = self.journals_dir / journal_id
+        current, _ = load_frontmatter(journal_dir / 'journal.md')
+        current.update(data)
+        save_yaml_only(journal_dir / 'journal.md', update_last_modified(current))
+
+    def set_journal_mode(self, journal_id: str, mode: str) -> None:
+        if mode not in JOURNAL_MODES:
+            raise ValueError(f'Invalid journal mode: {mode}')
+        self.save_journal_meta(journal_id, {'mode': mode})
+
+    def save_prompt_tuning(self, journal_id: str, enabled: bool, ocr_settings: dict, translation_settings: dict, prompt_tuning_description: str = "") -> None:
+        """Save the advanced prompt tuning settings for a journal (additive only)."""
+        data = {
+            'advanced_prompt_tuning_enabled': bool(enabled),
+            'ocr_settings': {
+                'custom_instructions': (ocr_settings or {}).get('custom_instructions', '').strip(),
+                'date_and_structure_hints': (ocr_settings or {}).get('date_and_structure_hints', '').strip(),
+            },
+            'translation_settings': {
+                'custom_instructions': (translation_settings or {}).get('custom_instructions', '').strip(),
+                'terminology_and_style_notes': (translation_settings or {}).get('terminology_and_style_notes', '').strip(),
+            },
+            'prompt_tuning_description': (prompt_tuning_description or '').strip(),
+        }
+        self.save_journal_meta(journal_id, data)
+
+    def journal_paths(self, journal_id: str) -> tuple[Path, Path]:
+        journal_dir = self.journals_dir / journal_id
+        pages_dir = journal_dir / 'pages'
+        pages_dir.mkdir(parents=True, exist_ok=True)
+        return journal_dir, pages_dir
+
+    def list_pages(self, journal_id: str) -> list[dict[str, Any]]:
+        journal_meta = self.get_journal_meta(journal_id)
+        _, pages_dir = self.journal_paths(journal_id)
+        pages = []
+        for page_md in sorted(pages_dir.glob('page-*.md'), key=sort_key_page_name):
+            meta, body = load_frontmatter(page_md)
+            pages.append(self._build_page_dict(journal_id, page_md.stem, meta, body, journal_meta))
+        return pages
+
+    def list_pages_basic(self, journal_id: str) -> list[dict[str, Any]]:
+        _, pages_dir = self.journal_paths(journal_id)
+        pages = []
+        for page_md in sorted(pages_dir.glob('page-*.md'), key=sort_key_page_name):
+            meta, _ = load_frontmatter(page_md)
+            entries = meta.get('entries') or []
+            if not entries:
+                legacy_entry_date = meta.get('entry_date', '')
+                if legacy_entry_date or meta.get('transcription') or meta.get('translation') or meta.get('notes'):
+                    entries = [{
+                        'entry_date': legacy_entry_date,
+                        'transcription': meta.get('transcription', ''),
+                        'translation': meta.get('translation', ''),
+                        'notes': meta.get('notes', ''),
+                    }]
+            primary_entry = entries[0] if entries else {}
+            # Generate thumbnail so the template can render images
+            main_image = pages_dir / f'{page_md.stem}.jpg'
+            if main_image.exists():
+                thumb_url = self.thumbnail_for(main_image, journal_id, main_image.name)
+            else:
+                thumb_url = None
+
+            pages.append({
+                'slug': page_md.stem,
+                'page_number': meta.get('page_number'),
+                'entry_date': primary_entry.get('entry_date', meta.get('entry_date', '')),
+                'entries': entries,
+                'thumbnail_url': thumb_url,
+                'first_line': first_line(primary_entry.get('transcription', '')),
+            })
+        return pages
+
+    def get_journal_meta(self, journal_id: str) -> dict[str, A
