@@ -35,7 +35,7 @@
 <section class="cards-grid">
   {% for journal in journals %}
     <div class="card journal-card-container">
-      <a class="card journal-card" href="{{ url_for('journal.view_journal', journal_id=journal.id) }}">
+      <a class="card journal-card" href="{% if journal.is_editing %}{{ url_for('journal.view_journal', journal_id=journal.id) }}{% else %}{{ url_for('journal.read_journal', journal_id=journal.id) }}{% endif %}">
         {% if journal.thumbnail_url %}
           <img src="{{ journal.thumbnail_url }}" alt="{{ journal.title }}">
         {% else %}

@@ -41,8 +41,8 @@ mode: editing
 ### Complete
 
 - Journal overview (list, sort by scan or date)
-- **Read-only page editor** (view image, transcription, entries; no save)
-- Read journal (existing reader; may be replaced later as primary read UX)
+- **Read journal** (primary UX; opens by default from dashboard and journal URL)
+- Journal overview (`?overview=1`) for page grid, entry navigator, reopen, backup
 - Entry navigator
 - Backup
 - **Reopen for editing** (restores editing mode)
@@ -65,4 +65,3 @@ Blocked in complete: add pages, organize scans, save page, image/scrapbook/cover
 ## Future
 
 - Separate **journal page #** (printed folio) from scan index, display-only, no file rename
-- When Read mode is improved, complete journals may default to Read instead of read-only page editor
