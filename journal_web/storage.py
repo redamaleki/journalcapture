@@ -20,3 +20,71 @@ def normalize_journal_mode(meta: dict[str, Any]) -> str:
 
 def journal_is_editing(journal: dict[str, Any]) -> bool:
     return normalize_journal_mode(journal) == JOURNAL_MODE_EDITING
+
+
+from .utils import (
+    copy_file,
+    ensure_people_file,
+    first_line,
+    journal_uuid,
+    load_frontmatter,
+    make_thumbnail,
+    now_iso_date,
+    read_people,
+    save_frontmatter,
+    save_uploaded_image_as_jpeg,
+    save_yaml_only,
+    sort_key_page_name,
+    update_last_modified,
+    valid_date,
+    write_people,
+    _normalize_for_yaml,
+)
+
+
+class JournalStore:
+    def __init__(self):
+        self.journals_dir: Path = current_app.config['JOURNALS_DIR']
+        self.thumbs_dir: Path = current_app.config['THUMBS_DIR']
+
+    def list_journals(self) -> list[dict[str, Any]]:
+        journals = []
+        for journal_dir in sorted(self.journals_dir.iterdir() if self.journals_dir.exists() else [], key=lambda p: p.name):
+            if journal_dir.is_dir():
+                journals.append(self.get_journal(journal_dir.name, include_pages=False))
+        return journals
+
+    def delete_journal(self, journal_id: str) -> None:
+        journal_dir = self.journals_dir / journal_id
+        thumb_dir = self.thumbs_dir / journal_id
+        if journal_dir.exists():
+            shutil.rmtree(journal_dir)
+        if thumb_dir.exists():
+            shutil.rmtree(thumb_dir)
+
+    def create_journal(self, title: str, owner: str, description: str, has_translation: bool) -> str:
+        journal_id = journal_uuid()
+        journal_dir = self.journals_dir / journal_id
+        pages_dir = journal_dir / 'pages'
+        pages_dir.mkdir(parents=True, exist_ok=True)
+        meta = {
+            'title': title,
+            'owner': owner,
+            'has_translation': bool(has_translation),
+            'description': description,
+            'cover_photo': '',
+            'created': now_iso_date(),
+            'last_modified': now_iso_date(),
+            'advanced_prompt_tuning_enabled': False,
+            'ocr_settings': {'custom_instructions': '', 'date_and_structure_hints': ''},
+            'translation_settings': {'custom_instructions': '', 'terminology_and_style_notes': ''},
+            'mode': JOURNAL_MODE_EDITING,
+        }
+        save_yaml_only(journal_dir / 'journal.md', meta)
+        write_people(journal_dir / 'people.json', [])
+        return journal_id
+
+    def set_journal_mode(self, journal_id: str, mode: str) -> None:
+        if mode not in JOURNAL_MODES:
+            raise ValueError(f'Invalid journal mode: {mode}')
+        self.save_journal_meta(journal_id, {'mode': mode})
