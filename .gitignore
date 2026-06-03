@@ -18,3 +18,5 @@ uploads/
 data/
 app.log
 reader_app.log
+debug_save.py
+reader_app.py
