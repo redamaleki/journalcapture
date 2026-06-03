@@ -35,6 +35,17 @@ def first_uploaded_file(field_name: str):
     return None
 
 
+def read_journal_url(journal_id: str, page_slug: str | None = None) -> str:
+    url = url_for('journal.read_journal', journal_id=journal_id)
+    if page_slug:
+        return f'{url}#{page_slug}'
+    return url
+
+
+def journal_overview_url(journal_id: str) -> str:
+    return url_for('journal.view_journal', journal_id=journal_id, overview=1)
+
+
 def redirect_if_not_editing(journal_id: str):
     journal = store().get_journal(journal_id, include_pages=False)
     if journal_is_editing(journal):
@@ -43,7 +54,7 @@ def redirect_if_not_editing(journal_id: str):
         'This journal is complete. Reopen it for editing to add pages, reorder scans, or change images.',
         'error',
     )
-    return redirect(url_for('journal.view_journal', journal_id=journal_id))
+    return redirect(read_journal_url(journal_id))
 
 
 @bp.route('/')
@@ -160,6 +171,8 @@ def _redirect_after_upload(journal_id: str):
 def view_journal(journal_id: str):
     db = store()
     journal = db.get_journal(journal_id, include_pages=False)
+    if not journal_is_editing(journal) and request.args.get('overview') != '1':
+        return redirect(read_journal_url(journal_id))
     sort_mode = request.args.get('sort', 'page')
     pages = db.list_pages_basic(journal_id)
 
@@ -175,11 +188,16 @@ def view_journal(journal_id: str):
     for entry_date, entry_pages in sorted(grouped.items()):
         if not entry_pages:
             continue
+        first_slug = entry_pages[0]['slug']
+        if journal_is_editing(journal):
+            entry_url = url_for('journal.edit_page', journal_id=journal_id, page_slug=first_slug)
+        else:
+            entry_url = read_journal_url(journal_id, first_slug)
         entry_nav.append({
             'date': entry_date,
             'count': len(entry_pages),
             'page_numbers': ', '.join(str(page.get('page_number') or '') for page in entry_pages),
-            'url': url_for('journal.edit_page', journal_id=journal_id, page_slug=entry_pages[0]['slug']),
+            'url': entry_url,
         })
 
     if sort_mode == 'date':
@@ -218,7 +236,7 @@ def mark_journal_complete(journal_id: str):
         return blocked
     store().set_journal_mode(journal_id, JOURNAL_MODE_COMPLETE)
     flash('Journal marked complete. Pages and images are now view-only.', 'success')
-    return redirect(url_for('journal.view_journal', journal_id=journal_id))
+    return redirect(read_journal_url(journal_id))
 
 
 @bp.route('/journals/<journal_id>/mode/editing', methods=['POST'])
@@ -281,6 +299,8 @@ def edit_page(journal_id: str, page_slug: str):
             return render_template('partials/save_status.html', page=page, journal=journal)
         return redirect(url_for('journal.edit_page', journal_id=journal_id, page_slug=page_slug))
     journal = db.get_journal(journal_id, include_pages=False)
+    if not journal_is_editing(journal):
+        return redirect(read_journal_url(journal_id, page_slug))
     page = db.get_page(journal_id, page_slug)
     nav = db.page_navigation(journal_id, page_slug)
     transcribe_enabled = (
