@@ -1,1 +1,0 @@
-TRIGGER_LOAD_FROM_FILE:/tmp/cou_storage_full.json
