@@ -31,7 +31,10 @@
 <section class="journal-shell">
   <aside class="panel stack journal-sidebar journal-hero-panel">
     <div class="journal-hero-copy">
-      <h1>{{ journal.title }}</h1>
+      <div class="row-between wrap gap-sm align-end">
+        <h1>{{ journal.title }}</h1>
+        <span class="mode-badge mode-badge-{{ journal.mode }}">{% if journal.is_editing %}Editing{% else %}Complete{% endif %}</span>
+      </div>
       <p class="muted">{{ journal.description or 'No description yet.' }}</p>
       <div style="margin-top: 15px; margin-bottom: 20px;">
         <a class="button btn-success" style="width: 100%; text-align: center; font-size: 1.1em; padding: 12px;" href="{{ url_for('journal.read_journal', journal_id=journal.id) }}">Read Journal 📖</a>
@@ -51,20 +54,32 @@
     {% endif %}
 
     <div class="actions-col wrap">
-      <a class="button secondary small-btn" href="{{ url_for('journal.add_person', journal_id=journal.id) }}">Manage People</a>
+      {% if journal.is_editing %}
       <button type="button" class="secondary small-btn" data-modal-open="#add-pages-modal">Add Pages</button>
+      <a class="button secondary small-btn" href="{{ url_for('journal.organize_scans', journal_id=journal.id) }}">Organize scan order</a>
+      <a class="button secondary small-btn" href="{{ url_for('journal.add_person', journal_id=journal.id) }}">Manage People</a>
       <button type="button" class="secondary small-btn" data-modal-open="#rename-journal-modal">Rename Journal</button>
       {% if journal.advanced_prompt_tuning_enabled %}
       <a class="button secondary small-btn" href="{{ url_for('journal.prompt_tuning', journal_id=journal.id) }}">Prompt Tuning ★</a>
       {% endif %}
-      <form method="post" action="{{ url_for('journal.backup_journal', journal_id=journal.id) }}">
-        <button type="submit" class="small-btn">Backup This Journal</button>
+      <form method="post" action="{{ url_for('journal.mark_journal_complete', journal_id=journal.id) }}" onsubmit="return confirm('Mark this journal complete? You will not be able to add pages, reorder scans, or change images until you reopen for editing.');">
+        <button type="submit" class="secondary small-btn">Mark complete</button>
       </form>
       <form method="post" action="{{ url_for('journal.delete_journal', journal_id=journal.id) }}" onsubmit="return confirm('Delete this journal and all its pages?');">
         <button type="submit" class="danger small-btn">Delete Journal</button>
       </form>
+      {% else %}
+      <a class="button secondary small-btn" href="{{ url_for('journal.add_person', journal_id=journal.id) }}">View People</a>
+      <form method="post" action="{{ url_for('journal.reopen_journal_editing', journal_id=journal.id) }}" onsubmit="return confirm('Reopen this journal for editing? Scan order and images can be changed again.');">
+        <button type="submit" class="secondary small-btn">Reopen for editing</button>
+      </form>
+      {% endif %}
+      <form method="post" action="{{ url_for('journal.backup_journal', journal_id=journal.id) }}">
+        <button type="submit" class="small-btn">Backup This Journal</button>
+      </form>
     </div>
 
+    {% if journal.is_editing %}
     <div class="meta-row wrap">
       <form method="post" action="{{ url_for('journal.upload_cover', journal_id=journal.id) }}" enctype="multipart/form-data" class="cover-upload-actions" data-cover-upload-form>
         <input type="file" name="cover_photo" accept="image/*" class="hidden" id="cover-file-input">
@@ -74,34 +89,40 @@
         <button type="submit" class="small-btn hidden" data-cover-save>Save Cover</button>
       </form>
     </div>
+    {% endif %}
   </aside>
 
   <section class="journal-main-column stack">
-    <!-- Ultra-compact sticky header (mobile) - only Read + Add always visible -->
     <div class="mobile-sticky-header" id="journal-sticky-header">
       <div class="sticky-top-row">
         <h2 title="{{ journal.title }}">{{ journal.title }}</h2>
         <div class="primary-actions">
           <a class="button secondary small-btn" href="{{ url_for('journal.dashboard') }}">Dashboard</a>
           <a class="button btn-success small-btn" href="{{ url_for('journal.read_journal', journal_id=journal.id) }}">Read 📖</a>
+          {% if journal.is_editing %}
           <button type="button" class="secondary small-btn" data-modal-open="#add-pages-modal">Add 📄</button>
+          {% endif %}
           <button type="button" class="more-btn" onclick="toggleJournalMore(this)" aria-label="More actions">⋯</button>
         </div>
       </div>
       <div class="secondary-actions" id="journal-secondary-actions">
+        {% if journal.is_editing %}
+        <a class="button secondary small-btn" href="{{ url_for('journal.organize_scans', journal_id=journal.id) }}">Organize</a>
         <a class="button secondary small-btn" href="{{ url_for('journal.add_person', journal_id=journal.id) }}">People</a>
         <button type="button" class="secondary small-btn" data-modal-open="#rename-journal-modal">Rename</button>
         {% if journal.advanced_prompt_tuning_enabled %}
         <a class="button secondary small-btn" href="{{ url_for('journal.prompt_tuning', journal_id=journal.id) }}">Prompt Tuning ★</a>
         {% endif %}
         <button type="button" class="text-link-btn" data-modal-open="#cover-modal">Cover</button>
+        {% else %}
+        <a class="button secondary small-btn" href="{{ url_for('journal.add_person', journal_id=journal.id) }}">People</a>
+        {% endif %}
         <form method="post" action="{{ url_for('journal.backup_journal', journal_id=journal.id) }}" style="display:inline;">
           <button type="submit" class="small-btn">Backup</button>
         </form>
       </div>
     </div>
 
-    <!-- Cover image now scrolls away naturally (outside sticky header) -->
     <div class="mobile-cover-row">
       {% if journal.thumbnail_url %}
         <button type="button" class="cover-lightbox-trigger" data-lightbox-src="{% if journal.cover_photo %}{{ url_for('journal.cover_asset', journal_id=journal.id) }}{% else %}{{ journal.thumbnail_url }}{% endif %}" aria-label="Open larger cover image">
@@ -112,7 +133,7 @@
       {% endif %}
     </div>
 
-    <!-- Mobile cover upload form -->
+    {% if journal.is_editing %}
     <form id="cover-form-mobile" class="stack hidden compact-inline-form" method="post" enctype="multipart/form-data" action="{{ url_for('journal.upload_cover', journal_id=journal.id) }}" data-cover-upload-form>
       <input type="file" name="cover_photo" accept="image/*" class="hidden" id="cover-file-input-mobile">
       <input type="file" name="cover_photo" accept="image/*" capture="environment" class="hidden" id="cover-camera-input-mobile">
@@ -122,21 +143,15 @@
         <button type="submit" class="small-btn hidden" data-cover-save>Save Cover</button>
       </div>
     </form>
+    {% endif %}
 
     <section class="panel stack">
       <div class="row-between wrap gap-sm align-end">
         <div>
           <h2>Pages</h2>
-          <p class="muted">Browse pages by entry date in list view, or switch to visual scan order.</p>
+          <p class="muted">Open any scan to view{% if journal.is_editing %} or edit{% endif %}. Sort by scan order or entry date.</p>
         </div>
         <form method="get" class="view-controls-form row-between wrap gap-sm">
-          <input type="hidden" name="sort" value="{{ sort_mode }}">
-          <label>View
-            <select name="view" onchange="this.form.submit()">
-              <option value="visual" {% if view_mode == 'visual' %}selected{% endif %}>Visual View</option>
-              <option value="list" {% if view_mode == 'list' %}selected{% endif %}>List View</option>
-            </select>
-          </label>
           <label>Sort by
             <select name="sort" onchange="this.form.submit()">
               <option value="page" {% if sort_mode == 'page' %}selected{% endif %}>Scan order</option>
@@ -146,42 +161,14 @@
         </form>
       </div>
 
-      {% if view_mode == 'visual' %}
-      <form method="post" action="{{ url_for('journal.reorder_pages', journal_id=journal.id) }}" class="stack" id="page-reorder-form">
-        <div class="row-between wrap gap-sm">
-          <p class="muted">Drag thumbnails to change physical scan order. Reordering never changes entry data.</p>
-          <button type="submit" class="small-btn">Save Order</button>
-        </div>
-        <section class="visual-page-strip" id="visual-page-strip">
-          {% for page in pages %}
-            <article class="card visual-page-tile" data-page-slug="{{ page.slug }}">
-              <input type="hidden" name="page_slug" value="{{ page.slug }}">
-              <a class="visual-page-link" href="{{ url_for('journal.edit_page', journal_id=journal.id, page_slug=page.slug) }}">
-                {% if page.thumbnail_url %}
-                  <img src="{{ page.thumbnail_url }}" loading="lazy" alt="Page {{ page.page_number or loop.index }}">
-                {% else %}
-                  <div class="placeholder">No image</div>
-                {% endif %}
-                <div class="card-body stack-sm">
-                  <div class="meta-row"><strong>Page {{ page.page_number or loop.index }}</strong><span>{{ page.entry_date or 'No date' }}</span></div>
-                  <p class="excerpt">{{ page.first_line or 'No transcription yet.' }}</p>
-                </div>
-              </a>
-            </article>
-          {% else %}
-            <div class="panel">No pages yet. Upload some inside this journal.</div>
-          {% endfor %}
-        </section>
-      </form>
-      {% else %}
       <section class="page-card-grid compact-page-grid">
         {% for page in pages %}
           <a class="card page-card page-card-horizontal" href="{{ url_for('journal.edit_page', journal_id=journal.id, page_slug=page.slug) }}">
             {% if page.thumbnail_url %}
-              <img src="{{ page.thumbnail_url }}" loading="lazy" alt="Page {{ page.page_number or loop.index }}">
+              <img src="{{ page.thumbnail_url }}" loading="lazy" alt="Scan {{ page.page_number or loop.index }}">
             {% endif %}
             <div class="card-body stack-sm">
-              <div class="meta-row"><strong>Page {{ page.page_number or loop.index }}</strong><span>{{ page.entry_date or 'No date' }}</span></div>
+              <div class="meta-row"><strong>Scan {{ page.page_number or loop.index }}</strong><span>{{ page.entry_date or 'No date' }}</span></div>
               {% if page.entries and page.entries|length > 1 %}<div class="meta-row"><span>Entries</span><span>{{ page.entries|length }}</span></div>{% endif %}
               <p class="excerpt">{{ page.first_line or 'No transcription yet.' }}</p>
             </div>
@@ -190,7 +177,6 @@
           <div class="panel">No pages yet. Upload some inside this journal.</div>
         {% endfor %}
       </section>
-      {% endif %}
     </section>
 
     {% if entry_nav %}
@@ -203,7 +189,7 @@
         <label>Entry date
           <select data-entry-select>
             {% for entry in entry_nav %}
-              <option value="{{ loop.index0 }}">{{ entry.date }} · Page {{ entry.page_numbers }}{% if entry.count > 1 %} · {{ entry.count }} pages{% endif %}</option>
+              <option value="{{ loop.index0 }}">{{ entry.date }} · Scan {{ entry.page_numbers }}{% if entry.count > 1 %} · {{ entry.count }} pages{% endif %}</option>
             {% endfor %}
           </select>
         </label>
@@ -213,7 +199,7 @@
         <input type="range" min="0" max="{{ entry_nav|length - 1 }}" value="0" step="1" data-entry-slider>
         <div class="timeline-readout">
           <strong data-entry-date>{{ entry_nav[0].date }}</strong>
-          <span class="muted" data-entry-pages>Page {{ entry_nav[0].page_numbers }}</span>
+          <span class="muted" data-entry-pages>Scan {{ entry_nav[0].page_numbers }}</span>
         </div>
       </div>
       <script type="application/json" data-entry-nav-json>{{ entry_nav | tojson }}</script>
