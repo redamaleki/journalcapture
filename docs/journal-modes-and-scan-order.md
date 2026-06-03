@@ -2,46 +2,47 @@
 
 ## Overview
 
-Journals support two modes stored in `journal.md` frontmatter:
+Each journal has a **mode** that controls whether structure and media can change:
 
-- **editing** (default): full authoring — uploads, reorder, image replace, save, transcribe.
-- **complete**: read-only for content; scan order can still be organized on a dedicated screen.
+| Mode | Stored value | Purpose |
+|------|----------------|---------|
+| **Editing** | `editing` | Upload scans, fix upload order, edit entries, replace images, transcribe |
+| **Complete** | `complete` | Browse and read; structure and images are locked |
 
-## Mode persistence
+Default for new journals: `editing`. Existing journals without a `mode` field are treated as `editing`.
 
-- Field: `mode: editing | complete` in journal metadata (`journal.md`).
-- `JournalStore.normalize_journal_mode()` and `journal_is_editing()` enforce valid values.
-- `set_journal_mode(journal_id, mode)` updates metadata.
+Stored in `journal.md` frontmatter as `mode: editing` or `mode: complete`.
 
-## UI behavior
+## Editing mode
 
-### Journal overview (`journal_view.html`)
+- Upload new page images
+- Organize scan order (dedicated screen)
+- Edit transcriptions, translations, notes
+- Replace page images, add scrapbook items
+- Transcribe / translate via OpenRouter add-in
+- Rename journal, delete pages, etc.
 
-- Mode toggle (editing ↔ complete) when allowed.
-- In **complete** mode: hide/disable upload, drag-reorder, and destructive actions.
-- Default sort: **scan order** (`page_number`), not drag order.
-- Link to **Organize scan order** screen.
+## Complete mode
 
-### Page editor (`page_editor.html`)
+- View journal overview and pages (read-only)
+- Read-only page editor (no save, transcribe, or uploads)
+- Organize scan order is **not** available in complete mode (reopen for editing first)
+- Mode can be switched back to editing via "Reopen for editing"
 
-- In **complete** mode: fields read-only; no save/transcribe/upload.
+## Scan order vs date sort
 
-### Organize scans
+- **Default overview sort**: scan order (`page_number`)
+- **Optional**: sort by entry date via `?sort=date`
+- Drag-reorder on the overview was removed; use **Organize scan order** (`/journals/<id>/organize-scans`)
 
-- Dedicated route/screen to reorder pages by scan order without entering full edit mode.
+## Server-side guards
 
-## Server guards (`views.py` + `storage.py`)
+`journal_is_editing()` is checked on mutating routes and in `JournalStore` methods that change files.
 
-- POST routes for upload, reorder, save, transcribe, image replace check `journal_is_editing()`.
-- Flash or 403-style feedback when blocked in complete mode.
+## Key files
 
-## Sorting
-
-- Overview list uses scan order by default.
-- Date sort remains available via query param where implemented.
-
-## Related files
-
-- `journal_web/storage.py` — mode helpers, guards in mutating methods.
-- `journal_web/views.py` — route guards, organize-scans view.
-- `templates/journal_view.html`, `page_editor.html`, `dashboard.html`.
+- `journal_web/storage.py` — mode constants, `set_journal_mode`, guards
+- `journal_web/views.py` — `organize_scans`, `mark_journal_complete`, `reopen_journal_editing`, `redirect_if_not_editing`
+- `templates/journal_view.html` — mode UI, sort, link to organize scans
+- `templates/page_editor.html` — `read_only` when complete
+- `templates/organize_scans.html` — reorder UI
