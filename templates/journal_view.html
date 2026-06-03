@@ -174,7 +174,7 @@
             </div>
           </a>
         {% else %}
-          <div class="panel">No pages yet. Upload some inside this journal.</div>
+          <div class="panel">No pages yet.{% if journal.is_editing %} Use Add Pages to upload scans.{% endif %}</div>
         {% endfor %}
       </section>
     </section>
@@ -189,7 +189,7 @@
         <label>Entry date
           <select data-entry-select>
             {% for entry in entry_nav %}
-              <option value="{{ loop.index0 }}">{{ entry.date }} · Scan {{ entry.page_numbers }}{% if entry.count > 1 %} · {{ entry.count }} pages{% endif %}</option>
+              <option value="{{ loop.index0 }}">{{ entry.date }} · Page {{ entry.page_numbers }}{% if entry.count > 1 %} · {{ entry.count }} pages{% endif %}</option>
             {% endfor %}
           </select>
         </label>
@@ -199,7 +199,7 @@
         <input type="range" min="0" max="{{ entry_nav|length - 1 }}" value="0" step="1" data-entry-slider>
         <div class="timeline-readout">
           <strong data-entry-date>{{ entry_nav[0].date }}</strong>
-          <span class="muted" data-entry-pages>Scan {{ entry_nav[0].page_numbers }}</span>
+          <span class="muted" data-entry-pages>Page {{ entry_nav[0].page_numbers }}</span>
         </div>
       </div>
       <script type="application/json" data-entry-nav-json>{{ entry_nav | tojson }}</script>
@@ -216,6 +216,7 @@
   </div>
 </div>
 
+{% if journal.is_editing %}
 <div id="add-pages-modal" class="modal hidden" aria-hidden="true">
   <div class="modal-backdrop" data-modal-close></div>
   <div class="modal-dialog panel stack" role="dialog" aria-modal="true" aria-labelledby="add-pages-title">
@@ -268,4 +269,5 @@
     </form>
   </div>
 </div>
+{% endif %}
 {% endblock %}
