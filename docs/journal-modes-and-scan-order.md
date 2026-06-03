@@ -2,67 +2,46 @@
 
 ## Overview
 
-Each journal has a **mode** that controls whether structure and media can change:
+Journals support two modes stored in `journal.md` frontmatter:
 
-| Mode | Stored value | Purpose |
-|------|----------------|---------|
-| **Editing** | `editing` | Upload scans, fix upload order, edit entries, replace images, transcribe |
-| **Complete** | `complete` | Browse and read; structure and images are locked |
+- **editing** (default): full authoring — uploads, reorder, image replace, save, transcribe.
+- **complete**: read-only for content; scan order can still be organized on a dedicated screen.
 
-Default for new journals: `editing`. Existing journals without a `mode` field are treated as `editing`.
+## Mode persistence
 
-Stored in `journal.md` frontmatter:
+- Field: `mode: editing | complete` in journal metadata (`journal.md`).
+- `JournalStore.normalize_journal_mode()` and `journal_is_editing()` enforce valid values.
+- `set_journal_mode(journal_id, mode)` updates metadata.
 
-```yaml
-mode: editing
-```
+## UI behavior
 
-## Scan order vs entry data
+### Journal overview (`journal_view.html`)
 
-- **Scan order** is the sequence files were captured (`page-001`, `page-002`, … on disk).
-- **Entry dates and text** live in page frontmatter (`entries[]`) and are not changed when scan order is fixed.
-- Reordering scans renames page files to stay sequential and updates `page_number` to match position (1…N).
+- Mode toggle (editing ↔ complete) when allowed.
+- In **complete** mode: hide/disable upload, drag-reorder, and destructive actions.
+- Default sort: **scan order** (`page_number`), not drag order.
+- Link to **Organize scan order** screen.
 
-**Organize scan order** is a dedicated screen (not the main journal overview). Use it after upload when sheets were added out of order (e.g. scan 10 before scan 9).
+### Page editor (`page_editor.html`)
 
-## What each mode allows
+- In **complete** mode: fields read-only; no save/transcribe/upload.
 
-### Editing
+### Organize scans
 
-- Add pages (upload / camera)
-- **Organize scan order** (drag thumbnails, save)
-- Page editor: save entries, people, physical page number field
-- Replace main page image; scrapbook add/remove
-- Transcribe & translate (if enabled)
-- Cover photo, rename journal, people manager (write), prompt tuning, delete page
-- Mark journal **Complete**
-- Backup
+- Dedicated route/screen to reorder pages by scan order without entering full edit mode.
 
-### Complete
+## Server guards (`views.py` + `storage.py`)
 
-- Journal overview (list, sort by scan or date)
-- **Read-only page editor** (view image, transcription, entries; no save)
-- Read journal (existing reader; may be replaced later as primary read UX)
-- Entry navigator
-- Backup
-- **Reopen for editing** (restores editing mode)
+- POST routes for upload, reorder, save, transcribe, image replace check `journal_is_editing()`.
+- Flash or 403-style feedback when blocked in complete mode.
 
-Blocked in complete: add pages, organize scans, save page, image/scrapbook/cover changes, transcribe accept, delete page, rename journal (optional—currently blocked), people POST.
+## Sorting
 
-## Mode transitions
+- Overview list uses scan order by default.
+- Date sort remains available via query param where implemented.
 
-**Mark complete** — confirmation explains that add/reorder/images are disabled until reopen.
+## Related files
 
-**Reopen for editing** — confirmation explains scan order and images can change again.
-
-## UI surfaces
-
-- Dashboard: mode badge per journal card
-- Journal overview: mode badge; editing actions vs complete actions in sidebar
-- Main overview: **list view only** (no drag-reorder strip); sort by scan order or entry date
-- `/journals/<id>/organize-scans`: thumbnail strip + Save order / Cancel
-
-## Future
-
-- Separate **journal page #** (printed folio) from scan index, display-only, no file rename
-- When Read mode is improved, complete journals may default to Read instead of read-only page editor
+- `journal_web/storage.py` — mode helpers, guards in mutating methods.
+- `journal_web/views.py` — route guards, organize-scans view.
+- `templates/journal_view.html`, `page_editor.html`, `dashboard.html`.
