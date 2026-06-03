@@ -1,14 +1,16 @@
 {% extends 'base.html' %}
-{% block title %}Page {{ page.page_number }} · {{ journal.title }}{% endblock %}
+{% block title %}{% if read_only %}View{% else %}Edit{% endif %} scan {{ page.page_number }} · {{ journal.title }}{% endblock %}
 {% block header_actions %}
-  <span class="page-header-chip">Page {{ page.page_number }}</span>
+  <span class="page-header-chip">Scan {{ page.page_number }}{% if read_only %} · View only{% endif %}</span>
+  {% if not read_only %}
   <button form="page-edit-form" type="submit" class="small-btn">Save</button>
+  {% endif %}
   {% if nav.prev %}
     <a class="button secondary nav-btn small-btn guarded-nav" href="{{ url_for('journal.edit_page', journal_id=journal.id, page_slug=nav.prev.slug) }}">← Prev</a>
   {% endif %}
   {% if nav.next %}
     <a class="button secondary nav-btn small-btn guarded-nav" href="{{ url_for('journal.edit_page', journal_id=journal.id, page_slug=nav.next.slug) }}">Next →</a>
-  {% elif nav.is_last %}
+  {% elif nav.is_last and journal.is_editing %}
     <a class="button secondary nav-btn small-btn guarded-nav" href="{{ url_for('journal.view_journal', journal_id=journal.id, next=url_for('journal.edit_page', journal_id=journal.id, page_slug=page.slug)) }}#add-pages-modal">＋ Add Page</a>
   {% endif %}
   <a class="button secondary small-btn guarded-nav" href="{{ url_for('journal.view_journal', journal_id=journal.id) }}">Journal Overview</a>
@@ -18,7 +20,7 @@
   <div class="row-between wrap gap-sm">
     <div>
       <h1 class="page-editor-title">{{ journal.title }}</h1>
-      <p class="muted">Page {{ page.page_number }}</p>
+      <p class="muted">Scan {{ page.page_number }}{% if read_only %} — view only (journal is complete){% endif %}</p>
     </div>
     <div id="save-status">{% include 'partials/save_status.html' %}</div>
   </div>
@@ -32,6 +34,7 @@
           <img class="main-image" src="{{ page.image_url }}" alt="Page image">
         </button>
       {% endif %}
+      {% if not read_only %}
       <form class="cover-upload-actions" method="post" enctype="multipart/form-data" action="{{ url_for('journal.replace_page_image', journal_id=journal.id, page_slug=page.slug) }}" data-cover-upload-form>
         <input type="file" name="page_image" accept="image/*" class="hidden" id="page-file-input">
         <input type="file" name="page_image" accept="image/*" capture="environment" class="hidden" id="page-camera-input">
@@ -39,6 +42,7 @@
         <button type="button" class="button secondary small-btn" data-cover-picker="page-camera-input">Take page photo</button>
         <button type="submit" class="small-btn hidden" data-cover-save>Save Page Image</button>
       </form>
+      {% endif %}
       {% if transcribe_enabled and page.image_url %}
       <form class="stack-sm transcribe-translate-form" method="post" action="{{ url_for('journal.transcribe_translate_preview', journal_id=journal.id, page_slug=page.slug) }}" data-processing-form>
         <input type="hidden" name="previous_date_text" value="{{ nav.suggested_entry_date or '' }}">
@@ -57,6 +61,7 @@
           <h2>Scrapbook</h2>
           <p class="muted">Scroll sideways to review attached items.</p>
         </div>
+        {% if not read_only %}
         <form class="scrapbook-upload-form" method="post" enctype="multipart/form-data" action="{{ url_for('journal.add_scrapbook_item', journal_id=journal.id, page_slug=page.slug) }}" data-scrapbook-upload-form>
           <label class="file-pill">
             <span data-file-label>Add item</span>
@@ -64,6 +69,7 @@
           </label>
           <button type="submit" class="small-btn" data-scrapbook-upload-button disabled>Upload</button>
         </form>
+        {% endif %}
       </div>
 
       <div class="scrapbook-row clean-scroll">
@@ -72,10 +78,12 @@
           <button type="button" class="scrapbook-lightbox-trigger" data-lightbox-src="{{ url_for('journal.page_asset', journal_id=journal.id, filename=scrapbook) }}" aria-label="Open scrapbook item">
             <img src="{{ url_for('journal.page_asset', journal_id=journal.id, filename=scrapbook) }}" alt="Scrapbook item">
           </button>
+          {% if not read_only %}
           <form method="post" action="{{ url_for('journal.remove_scrapbook_item', journal_id=journal.id, page_slug=page.slug) }}">
             <input type="hidden" name="filename" value="{{ scrapbook }}">
             <button type="submit" class="danger small-btn">Remove</button>
           </form>
+          {% endif %}
         </div>
         {% else %}
         <p class="muted">No scrapbook items yet.</p>
@@ -86,13 +94,15 @@
 
   <form id="page-edit-form" class="panel stack compact-form page-editor-form" method="post" action="{{ url_for('journal.edit_page', journal_id=journal.id, page_slug=page.slug) }}">
     <div class="editor-meta-bar">
-      <label class="page-number-field">Physical page number (optional)<input type="number" name="page_number" value="{{ page.page_number or '' }}"></label>
+      <label class="page-number-field">Scan number<input type="number" name="page_number" value="{{ page.page_number or '' }}" {% if read_only %}readonly{% endif %}></label>
+      {% if not read_only %}
       <div class="entry-helper-row compact-inline-tools">
         {% if nav.suggested_entry_date %}
           <button type="button" class="secondary small-btn fill-suggestion" data-target=".entry-date-input" data-value="{{ nav.suggested_entry_date }}">Use {{ nav.suggested_entry_date }}</button>
         {% endif %}
         <button type="button" class="secondary small-btn" data-toggle-target="#multi-entry-help">Entry help</button>
       </div>
+      {% endif %}
     </div>
 
     <div id="multi-entry-help" class="inline-person-panel hidden">
@@ -105,7 +115,9 @@
           <h2>Entries</h2>
           <p class="muted">Keep it simple. Most pages only need one entry block.</p>
         </div>
+        {% if not read_only %}
         <button type="button" class="secondary small-btn" id="add-entry-btn" data-default-date="{{ nav.suggested_entry_date }}">Add Entry</button>
+        {% endif %}
       </div>
 
       <div id="entries-container" class="entries-container streamlined-entries">
@@ -117,19 +129,19 @@
               <span class="entry-chip">Entry {{ loop.index }}</span>
               {% if entry.entry_date %}<span class="entry-date-chip">{{ entry.entry_date }}</span>{% endif %}
             </div>
-            {% if loop.index > 1 %}<button type="button" class="text-link-btn remove-entry-btn">Remove</button>{% endif %}
+            {% if loop.index > 1 and not read_only %}<button type="button" class="text-link-btn remove-entry-btn">Remove</button>{% endif %}
           </div>
-          <label>Date<input type="date" class="entry-date-input" name="entry_date" value="{{ entry.entry_date or '' }}"></label>
+          <label>Date<input type="date" class="entry-date-input" name="entry_date" value="{{ entry.entry_date or '' }}" {% if read_only %}readonly{% endif %}></label>
           <details class="entry-details" open>
             <summary>Collapse entry</summary>
             <div class="stack entry-details-body">
               {% if journal.has_translation %}
-                <label>Translation<textarea name="entry_translation" rows="5">{{ entry.translation }}</textarea></label>
+                <label>Translation<textarea name="entry_translation" rows="5" {% if read_only %}readonly{% endif %}>{{ entry.translation }}</textarea></label>
               {% else %}
                 <input type="hidden" name="entry_translation" value="">
               {% endif %}
-              <label>Transcription<textarea name="entry_transcription" rows="6">{{ entry.transcription }}</textarea></label>
-              <label>Comments<textarea name="entry_notes" rows="3">{{ entry.notes }}</textarea></label>
+              <label>Transcription<textarea name="entry_transcription" rows="6" {% if read_only %}readonly{% endif %}>{{ entry.transcription }}</textarea></label>
+              <label>Comments<textarea name="entry_notes" rows="3" {% if read_only %}readonly{% endif %}>{{ entry.notes }}</textarea></label>
             </div>
           </details>
         </article>
@@ -146,7 +158,7 @@
         <a href="{{ url_for('journal.add_person', journal_id=journal.id) }}" class="button secondary small-btn">Manage People</a>
       </div>
       <label>
-        <select name="people" multiple size="6" class="people-select">
+        <select name="people" multiple size="6" class="people-select" {% if read_only %}disabled{% endif %}>
           {% for person in journal.people %}
             <option value="{{ person.name }}" {% if person.name in page.people %}selected{% endif %}>{{ person.name }}{% if person.relation %} · {{ person.relation }}{% endif %}</option>
           {% endfor %}
@@ -155,9 +167,11 @@
       <p class="muted">Long-press or tap to select on phone. Ctrl/Cmd-click also works on desktop.</p>
     </section>
 
+    {% if not read_only %}
     <div class="bottom-danger-row">
       <button type="submit" form="delete-page-form" class="danger small-btn">Delete Page</button>
     </div>
+    {% endif %}
   </form>
 </section>
 
@@ -178,5 +192,7 @@
   </div>
 </div>
 
+{% if not read_only %}
 <form id="delete-page-form" method="post" action="{{ url_for('journal.delete_page', journal_id=journal.id, page_slug=page.slug) }}" onsubmit="return confirm('Delete this page?');"></form>
+{% endif %}
 {% endblock %}
