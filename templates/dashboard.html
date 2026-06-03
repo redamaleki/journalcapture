@@ -42,7 +42,10 @@
           <div class="placeholder">No pages yet</div>
         {% endif %}
         <div class="card-body">
-          <h3>{{ journal.title }}</h3>
+          <div class="row-between wrap gap-sm">
+            <h3>{{ journal.title }}</h3>
+            <span class="mode-badge mode-badge-{{ journal.mode }}">{% if journal.is_editing %}Editing{% else %}Complete{% endif %}</span>
+          </div>
           <p>{{ journal.owner or 'No owner' }}</p>
           <div class="meta-row">
             <span>{{ journal.pages|length if journal.pages is defined else journal.page_count }} pages</span>
@@ -58,12 +61,14 @@
         <a class="button btn-success small-btn" href="{{ url_for('journal.read_journal', journal_id=journal.id) }}">Read Journal</a>
 
         <!-- Advanced Prompt Tuning toggle (immediate save) -->
+        {% if journal.is_editing %}
         <form method="post" action="{{ url_for('journal.toggle_advanced_prompt_tuning', journal_id=journal.id) }}" style="display: inline; margin: 0;">
           <label style="display: flex; align-items: center; gap: 4px; font-size: 0.8em; cursor: pointer; user-select: none;">
             <input type="checkbox" name="advanced" {% if journal.advanced_prompt_tuning_enabled %}checked{% endif %} onchange="this.form.submit()">
             Advanced
           </label>
         </form>
+        {% endif %}
 
         {% if journal.advanced_prompt_tuning_enabled %}
         <a class="button secondary small-btn" href="{{ url_for('journal.prompt_tuning', journal_id=journal.id) }}" style="font-size: 0.8em; padding: 2px 8px;">Prompt Tuning</a>
