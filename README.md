@@ -195,9 +195,12 @@ python export_static.py \
 After export you will see:
 - `index.html` — the complete reader
 - `media/` — only the page scans and scrapbook images referenced by the chosen pages (+ cover if requested)
+- `icons/` — full favicon set, apple-touch-icon, android icons, logo.svg, customized site.webmanifest (journal title + matching theme color) and browserconfig. The share is now a proper bookmarkable / add-to-home-screen PWA.
 - `data.json` — machine-readable parsed entries (for further processing or auditing)
 - `raw/` (only if `--include-raw-md`) — the original `.md` sidecars for the subset
 - `README.txt` — human instructions for the recipient
+
+The live Journal App itself also ships with the same professional icon set (dashboard, editors, and the in-app Read Journal view all get proper favicons + manifest).
 
 Preview locally right after export:
 ```bash

@@ -4,6 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>{{ journal.title }} · Journal Reader</title>
+
+  <!-- Favicons, touch icons, PWA manifest (served from Flask static) -->
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='icons/icon-32x32.png') }}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='icons/icon-16x16.png') }}">
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='icons/favicon.ico') }}">
+  <link rel="manifest" href="{{ url_for('static', filename='icons/site.webmanifest') }}">
+  <meta name="theme-color" content="#8b5e34">
+  <meta name="msapplication-TileColor" content="#8b5e34">
+  <meta name="msapplication-config" content="{{ url_for('static', filename='icons/browserconfig.xml') }}">
+
   <style>
     :root {
       color-scheme: light;

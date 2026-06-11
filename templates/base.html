@@ -4,6 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Journal App{% endblock %}</title>
+
+  <!-- Favicons, touch icons, PWA manifest (from project icons set) -->
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='icons/icon-32x32.png') }}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='icons/icon-16x16.png') }}">
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='icons/favicon.ico') }}">
+  <link rel="manifest" href="{{ url_for('static', filename='icons/site.webmanifest') }}">
+  <meta name="theme-color" content="#8b5e34">
+  <meta name="msapplication-TileColor" content="#8b5e34">
+  <meta name="msapplication-config" content="{{ url_for('static', filename='icons/browserconfig.xml') }}">
+
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
@@ -11,7 +22,10 @@
 <body>
   <header class="site-header">
     <div>
-      <a class="brand" href="{{ url_for('journal.dashboard') }}">Journal App</a>
+      <a class="brand" href="{{ url_for('journal.dashboard') }}">
+        <img src="{{ url_for('static', filename='icons/icon-32x32.png') }}" alt="" style="height:1.1em; width:auto; vertical-align:middle; margin-right:4px;">
+        Journal App
+      </a>
       <p class="tagline">Manual, local-first journal digitization</p>
     </div>
     <nav class="site-nav">

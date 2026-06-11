@@ -202,6 +202,44 @@ def copy_media(journal_dir: Path, selected_pages: list[dict[str, Any]], media_di
     return copied
 
 
+def copy_icons(icons_src: Path, icons_dir: Path, journal_title: str = "Journal") -> None:
+    """Copy the project's icon set into the export and customize the webmanifest for this journal.
+    Icons live under <out>/icons/ so the generated static site is fully self-contained.
+    """
+    icons_dir.mkdir(parents=True, exist_ok=True)
+    if not icons_src.exists():
+        print("Warning: static/icons/ not found — skipping icon bundle for this export.")
+        return
+
+    for p in sorted(icons_src.iterdir()):
+        if p.is_file():
+            shutil.copy2(p, icons_dir / p.name)
+
+    # Customize manifest with journal-specific name + theme matching the paper aesthetic
+    manifest_path = icons_dir / "site.webmanifest"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
+    except Exception:
+        manifest = {}
+
+    short = (journal_title or "Journal")[:12]
+    manifest.update({
+        "name": f"{journal_title} · Journal Capture",
+        "short_name": short or "Journal",
+        "theme_color": "#8b5e34",
+        "background_color": "#f7f1e8",
+        "display": "standalone",
+    })
+
+    # Ensure icon srcs are relative to the icons/ subfolder in the export
+    for ic in manifest.get("icons", []) or []:
+        src = ic.get("src", "")
+        if src and not src.startswith(("icons/", "media/")) and "/" not in src:
+            ic["src"] = f"icons/{src}"
+
+    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+
+
 def compute_date_range(pages: list[dict[str, Any]]) -> str:
     dated = []
     for p in pages:
@@ -279,9 +317,14 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
     media_dir = out / "media"
     raw_dir = out / "raw" if args.include_raw_md else None
+    icons_dir = out / "icons"
 
     # Copy images (mutates selected with the url fields)
     copied = copy_media(journal_dir, selected, media_dir, include_cover=args.include_cover, journal_meta=jmeta)
+
+    # Bundle icons + customize manifest for this particular journal (self-contained static share)
+    icons_src = Path(__file__).resolve().parent / "static" / "icons"
+    copy_icons(icons_src, icons_dir, journal_title=jmeta.get("title", "Journal"))
 
     # Prepare template context (shape compatible with the reader expectations)
     date_range = compute_date_range(selected)
@@ -380,6 +423,7 @@ How to view
 -----------
 - Open index.html in any modern browser (double-click or file://...).
 - Works completely offline. All images are in the media/ folder next to it.
+- Icons/ folder contains favicons, apple-touch-icon, manifest, etc. for proper browser tabs and home-screen installation.
 - You can also serve the whole folder with any static server:
     python -m http.server -d {out.name} 0
     (or npx serve, caddy file-server, etc.)
@@ -393,6 +437,7 @@ Raw page metadata (for parsing/auditing) is in data.json{ ' and raw/' if raw_dir
     print(f"\n✓ Exported static reader to: {out}")
     print(f"  Pages: {len(selected)}")
     print(f"  Media files copied: {len(copied)}")
+    print(f"  Icons bundled: {len(list(icons_dir.iterdir())) if icons_dir.exists() else 0}")
     print(f"  Open: {out / 'index.html'}")
     print(f"  (or: cd {out} && python -m http.server 0 )")
 
