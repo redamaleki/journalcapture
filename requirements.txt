@@ -26,6 +26,12 @@ pillow>=10.0
 # Production WSGI server (used in Docker)
 gunicorn>=22.0
 
+# For the static exporter (export_static.py) — Jinja2 is used at export time only
+# (the generated sites are 100% static with no runtime dependency on Jinja2).
+# Flask pulls Jinja2 transitively today, but we list it explicitly because
+# export_static.py does a direct `from jinja2 import ...`.
+jinja2>=3.0
+
 # -----------------------------------------------------------------------------
 # Notes for maintainers / future agents:
 # - Do not add large numbers of packages here without a good reason.

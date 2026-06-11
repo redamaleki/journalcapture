@@ -1,0 +1,595 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{{ journal.title or 'Journal' }} · Static Reader</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f1e8;
+      --paper: #fffdf8;
+      --ink: #2f2923;
+      --muted: #766c61;
+      --line: #eadfce;
+      --accent: #8b5e34;
+      --accent-2: #245c6a;
+      --accent-soft: #f0dfc8;
+      --shadow: 0 18px 50px rgba(64, 43, 24, .14);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: ui-serif, Georgia, Cambria, "Times New Roman", serif;
+      background:
+        radial-gradient(circle at top left, rgba(139, 94, 52, .16), transparent 32rem),
+        linear-gradient(180deg, #fbf7ef 0%, var(--bg) 45%, #efe2d0 100%);
+      color: var(--ink);
+      line-height: 1.58;
+    }
+    button, select { font: inherit; }
+    a { color: inherit; }
+    .reader-shell { min-height: 100vh; padding-bottom: calc(88px + var(--safe-bottom)); }
+    .hero {
+      position: relative;
+      min-height: 58vh;
+      display: grid;
+      align-items: end;
+      padding: 28px 18px 32px;
+      overflow: hidden;
+      background: #3a2c21;
+      color: #fffaf1;
+    }
+    .hero::before {
+      content: "";
+      position: absolute; inset: 0;
+      background-image: var(--cover-url);
+      background-size: cover;
+      background-position: center;
+      filter: saturate(.88) brightness(.58);
+      transform: scale(1.03);
+    }
+    .hero::after {
+      content: ""; position: absolute; inset: 0;
+      background: linear-gradient(180deg, rgba(0,0,0,.14), rgba(0,0,0,.72));
+    }
+    .hero-card {
+      position: relative; z-index: 1; max-width: 760px; margin: 0 auto; width: 100%;
+      text-shadow: 0 2px 18px rgba(0,0,0,.42);
+    }
+    .kicker { margin: 0 0 8px; letter-spacing: .12em; text-transform: uppercase; font: 700 .76rem ui-sans-serif, system-ui, sans-serif; opacity: .86; }
+    h1 { margin: 0; font-size: clamp(2.3rem, 13vw, 5.8rem); line-height: .92; letter-spacing: -.05em; }
+    .subtitle { margin: 12px 0 0; font-size: clamp(1.05rem, 4vw, 1.5rem); opacity: .95; }
+    .description { margin: 8px 0 0; max-width: 42rem; color: rgba(255,250,241,.86); }
+    .hero-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; font: 700 .82rem ui-sans-serif, system-ui, sans-serif; }
+    .pill { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 7px 11px; border-radius: 999px; background: rgba(255,250,241,.16); border: 1px solid rgba(255,255,255,.22); backdrop-filter: blur(8px); }
+    .top-tools {
+      position: sticky; top: 0; z-index: 20;
+      background: rgba(255,253,248,.88); backdrop-filter: blur(18px);
+      border-bottom: 1px solid rgba(234, 223, 206, .9);
+      padding: 10px 12px;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+    }
+    .top-tools-inner { max-width: 1100px; margin: 0 auto; display: grid; gap: 9px; }
+    .progress-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--muted); font-size: .9rem; }
+    .progress-track { height: 9px; border-radius: 999px; background: #eadfce; overflow: hidden; }
+    .progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: inherit; transition: width .25s ease; }
+    .controls { display: grid; gap: 8px; }
+    .controls-primary {
+      display: flex; gap: 8px; align-items: center; min-width: 0;
+    }
+    .controls-primary .page-jump { flex: 1; min-width: 0; }
+    .controls-primary .page-jump select { width: 100%; max-width: none; }
+    .controls-more-btn { margin-left: auto; flex-shrink: 0; }
+    .controls-desktop { display: none; }
+    .control, .segmented button, .page-jump select {
+      border: 1px solid var(--line); background: var(--paper); color: var(--ink);
+      border-radius: 999px; padding: 7px 10px; min-height: 34px; white-space: nowrap;
+      box-shadow: 0 1px 0 rgba(255,255,255,.8) inset;
+    }
+    .control.primary { background: var(--accent); color: white; border-color: var(--accent); }
+    .segmented { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; background: var(--paper); flex: 0 0 auto; }
+    .segmented button { border: 0; border-radius: 0; background: transparent; font-size: .88rem; padding: 6px 9px; }
+    .segmented button.active { background: var(--accent-soft); color: #4b321d; font-weight: 800; }
+    .page-jump select { max-width: 132px; font-size: .88rem; }
+    .reader-sheet {
+      position: fixed; inset: 0; z-index: 40; display: none; align-items: flex-end; justify-content: center;
+      pointer-events: none;
+    }
+    .reader-sheet.visible { display: flex; pointer-events: auto; }
+    .reader-sheet-backdrop {
+      position: absolute; inset: 0; background: rgba(47, 41, 35, .42);
+      opacity: 0; transition: opacity .2s ease;
+    }
+    .reader-sheet.visible .reader-sheet-backdrop { opacity: 1; }
+    .reader-sheet-panel {
+      position: relative; z-index: 1; width: 100%; max-width: 480px;
+      background: var(--paper); border-radius: 20px 20px 0 0;
+      padding: 0 0 calc(12px + var(--safe-bottom));
+      box-shadow: 0 -8px 40px rgba(64, 43, 24, .18);
+      transform: translateY(100%); transition: transform .24s ease;
+    }
+    .reader-sheet.visible .reader-sheet-panel { transform: translateY(0); }
+    .reader-sheet-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 14px 16px; border-bottom: 1px solid var(--line);
+    }
+    .reader-sheet-head h2 { margin: 0; font-size: 1rem; font-weight: 800; }
+    .reader-sheet-close {
+      width: 36px; height: 36px; padding: 0; border: 1px solid var(--line); border-radius: 999px;
+      background: var(--paper); color: var(--ink); font-size: 1.35rem; line-height: 1; cursor: pointer;
+    }
+    .reader-sheet-actions { display: grid; gap: 8px; padding: 12px 16px; }
+    .reader-sheet-actions .control,
+    .reader-sheet-actions a.control,
+    .reader-sheet-actions form { display: block; width: 100%; margin: 0; }
+    .reader-sheet-actions .control,
+    .reader-sheet-actions a.control,
+    .reader-sheet-actions button.control {
+      display: flex; align-items: center; justify-content: center; width: 100%;
+      min-height: 44px; border-radius: 14px; text-decoration: none;
+    }
+    .controls-desktop .control-form-inline { display: inline-flex; margin: 0; }
+    .controls-desktop .control-form-inline .control { cursor: pointer; }
+    body.sheet-open { overflow: hidden; }
+    .content { max-width: 1100px; margin: 0 auto; padding: 18px 14px 42px; }
+    .resume-card {
+      display: none; margin: 14px 0 18px; padding: 14px; border: 1px solid var(--line); border-radius: 20px;
+      background: rgba(255,253,248,.82); box-shadow: var(--shadow); font-family: ui-sans-serif, system-ui, sans-serif;
+    }
+    .resume-card.visible { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .resume-card p { margin: 0; color: var(--muted); }
+    .page-section {
+      scroll-margin-top: 120px;
+      margin: 18px 0 24px;
+      background: rgba(255,253,248,.92);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .page-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 14px 15px; border-bottom: 1px solid var(--line);
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      background: linear-gradient(180deg, rgba(255,255,255,.72), rgba(255,255,255,.32));
+    }
+    .page-title { margin: 0; font-size: 1rem; }
+    .page-date { color: var(--muted); font-size: .9rem; }
+    .read-state { color: var(--muted); font-size: .82rem; }
+    .page-body { display: flex; flex-direction: column; }
+    .page-media-col {
+      display: flex; flex-wrap: nowrap; align-items: center; gap: 8px;
+      padding: 10px 12px; background: #f3eadc; border-bottom: 1px solid var(--line);
+      overflow-x: auto; -webkit-overflow-scrolling: touch;
+    }
+    .page-image-wrap { flex: 0 0 auto; }
+    .page-image-btn {
+      display: block; padding: 0; border: 0; background: transparent; cursor: zoom-in; border-radius: 12px;
+    }
+    .page-image {
+      display: block; height: 88px; width: auto; max-width: min(42vw, 140px); object-fit: cover;
+      border-radius: 12px; background: #e9ddcd;
+    }
+    .scrapbook-thumbs { display: flex; flex-wrap: nowrap; gap: 8px; flex: 0 0 auto; }
+    .scrapbook-thumb-btn {
+      display: block; padding: 0; border: 2px solid rgba(139, 94, 52, .25); border-radius: 10px;
+      background: #e9ddcd; cursor: zoom-in; overflow: hidden; flex: 0 0 auto;
+    }
+    .scrapbook-thumb-btn img { display: block; height: 88px; width: auto; max-width: 88px; object-fit: cover; }
+    .page-content-col { min-width: 0; }
+    .entry { padding: 18px 17px 20px; border-top: 1px solid rgba(234, 223, 206, .65); }
+    .page-content-col > .entry:first-child { border-top: 0; }
+    .entry-date { margin: 0 0 9px; color: var(--accent); font: 800 .85rem ui-sans-serif, system-ui, sans-serif; letter-spacing: .02em; }
+    .entry-text { margin: 0; font-size: clamp(1.08rem, 4.4vw, 1.34rem); white-space: pre-wrap; }
+    .entry-text.translation { display: none; }
+    body.mode-translation .entry-text.transcription { display: none; }
+    body.mode-translation .entry-text.translation { display: block; }
+    .notes { margin-top: 12px; padding: 11px 12px; border-left: 4px solid var(--accent-soft); background: #fbf3e8; color: var(--muted); font-family: ui-sans-serif, system-ui, sans-serif; border-radius: 12px; white-space: pre-wrap; }
+    .people { padding: 0 17px 16px; display: flex; flex-wrap: wrap; gap: 8px; font-family: ui-sans-serif, system-ui, sans-serif; }
+    .tag { border-radius: 999px; padding: 5px 9px; font-size: .82rem; background: #eef6f7; color: var(--accent-2); }
+    .bottom-nav {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+      padding: 9px 10px calc(9px + var(--safe-bottom));
+      background: rgba(47,41,35,.9); backdrop-filter: blur(18px);
+      display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+    }
+    .bottom-nav button { border: 0; border-radius: 16px; min-height: 48px; padding: 10px 12px; background: rgba(255,250,241,.13); color: #fffaf1; }
+    .bottom-nav .center { color: #fffaf1; font-size: .85rem; text-align: center; min-width: 80px; }
+    .modal {
+      position: fixed; inset: 0; z-index: 60; display: none; align-items: center; justify-content: center;
+      padding: 16px;
+    }
+    .modal.visible { display: flex; }
+    .modal-backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, .88); }
+    .lightbox-shell {
+      position: relative; z-index: 1; width: min(100%, 1100px); max-height: calc(100vh - 32px);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .lightbox-image {
+      max-width: 100%; max-height: calc(100vh - 32px); object-fit: contain; border-radius: 12px;
+      background: #1a1510;
+    }
+    .lightbox-close {
+      position: absolute; top: 0; right: 0; width: 42px; height: 42px; padding: 0; border: 0;
+      border-radius: 999px; background: rgba(47, 41, 35, .82); color: #fffaf1; font-size: 1.5rem;
+      line-height: 1; cursor: pointer;
+    }
+    .empty { padding: 24px; color: var(--muted); text-align: center; }
+    .static-footer {
+      max-width: 1100px; margin: 24px auto 40px; padding: 0 14px;
+      font: 600 .78rem ui-sans-serif, system-ui, sans-serif; color: var(--muted);
+      text-align: center; opacity: .75;
+    }
+    @media (min-width: 760px) {
+      .reader-shell { padding-bottom: 0; }
+      .hero { min-height: 46vh; padding: 44px 24px; }
+      .content { padding-top: 24px; }
+      .page-section { border-radius: 28px; }
+      .bottom-nav { display: none; }
+    }
+    @media (min-width: 900px) {
+      .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+      .controls-primary { display: contents; }
+      .controls-more-btn { display: none !important; }
+      .controls-desktop { display: contents; }
+      .reader-sheet { display: none !important; }
+      .control, .segmented button, .page-jump select { min-height: 38px; padding: 8px 11px; }
+      .segmented button { font-size: inherit; padding: 8px 11px; }
+      .page-body {
+        display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 0;
+        align-items: start;
+      }
+      .page-body-text-only { display: block; }
+      .page-media-col {
+        flex-direction: column; align-items: stretch; gap: 12px;
+        padding: 18px 16px 20px; border-bottom: 0; border-right: 1px solid var(--line);
+        overflow: visible; position: sticky; top: 140px;
+      }
+      .page-image { height: auto; width: 100%; max-width: none; max-height: calc(100vh - 180px); object-fit: contain; }
+      .scrapbook-thumbs { flex-direction: column; }
+      .scrapbook-thumb-btn img { height: auto; width: 100%; max-width: none; max-height: 120px; }
+      .page-head { padding: 16px 20px; }
+      .entry { padding: 24px 28px 28px; }
+      .people { padding: 0 28px 20px; }
+    }
+    @media print {
+      .top-tools, .bottom-nav, .resume-card, .page-media-col, .reader-sheet { display: none !important; }
+      body { background: white; }
+      .page-section { box-shadow: none; border: 0; break-inside: avoid; }
+      .page-body { display: block; }
+    }
+  </style>
+</head>
+<body class="mode-translation" style="--cover-url: url('{{ journal.cover_url or journal.thumbnail_url or '' }}')">
+  <div class="reader-shell">
+    <header class="hero">
+      <div class="hero-card">
+        <p class="kicker">Read-only shared journal excerpt</p>
+        <h1>{{ journal.title or 'Untitled Journal' }}</h1>
+        {% if journal.description %}<p class="description">{{ journal.description }}</p>{% endif %}
+        <div class="hero-meta">
+          {% if journal.owner %}<span class="pill">By {{ journal.owner }}</span>{% endif %}
+          <span class="pill">{{ journal.page_count }} pages (excerpt)</span>
+          {% if date_range %}<span class="pill">{{ date_range }}</span>{% endif %}
+          <span class="pill">Static • works offline</span>
+        </div>
+      </div>
+    </header>
+
+    <nav class="top-tools" aria-label="Reading controls">
+      <div class="top-tools-inner">
+        <div class="progress-row">
+          <span id="progress-label">0% read</span>
+          <span id="current-label">Page 1</span>
+        </div>
+        <div class="progress-track" aria-hidden="true"><div class="progress-fill" id="progress-fill"></div></div>
+        <div class="controls">
+          <div class="controls-primary">
+            <div class="segmented" aria-label="Text mode">
+              <button type="button" id="mode-translation" class="active">Translation</button>
+              <button type="button" id="mode-transcription">Original</button>
+            </div>
+            <label class="page-jump"><span class="sr-only" style="position:absolute;left:-9999px">Jump to page</span><select id="page-jump">
+              {% for page in journal.pages %}<option value="{{ page.slug }}">Page {{ page.page_number }}</option>{% endfor %}
+            </select></label>
+            <button class="control controls-more-btn" type="button" id="open-reader-menu" aria-expanded="false" aria-controls="reader-menu-sheet">More</button>
+          </div>
+          <div class="controls-desktop">
+            <button class="control primary js-resume" type="button" id="resume-top">Resume</button>
+            <button class="control js-toggle-images" type="button" id="toggle-images">Hide images</button>
+            <button class="control js-reset-progress" type="button" id="reset-progress">Reset progress</button>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <main class="content">
+      <section class="resume-card" id="resume-card">
+        <div>
+          <strong>Welcome back.</strong>
+          <p id="resume-copy">Your place is saved on this device.</p>
+        </div>
+        <button class="control primary" type="button" id="resume-card-button">Continue</button>
+      </section>
+
+      {% if not journal.pages %}
+        <div class="empty">No pages in this excerpt.</div>
+      {% endif %}
+
+      {% for page in journal.pages %}
+      <article class="page-section" id="{{ page.slug }}" data-page-slug="{{ page.slug }}" data-page-number="{{ page.page_number }}">
+        <header class="page-head">
+          <div>
+            <h2 class="page-title">Page {{ page.page_number }}</h2>
+            {% if page.entry_date %}<div class="page-date">{{ page.entry_date }}</div>{% endif %}
+          </div>
+          <span class="read-state" data-read-state>Unread</span>
+        </header>
+        <div class="page-body{% if not page.image_url and not page.scrapbook_urls %} page-body-text-only{% endif %}">
+          {% if page.image_url or page.scrapbook_urls %}
+          <aside class="page-media-col" data-image-block aria-label="Page images">
+            {% if page.image_url %}
+            <div class="page-image-wrap">
+              <button type="button" class="page-image-btn" data-lightbox-src="{{ page.image_url }}" aria-label="View full page {{ page.page_number }} image">
+                <img class="page-image" src="{{ page.image_url }}" alt="Scanned image of page {{ page.page_number }}" loading="lazy">
+              </button>
+            </div>
+            {% endif %}
+            {% if page.scrapbook_urls %}
+            <div class="scrapbook-thumbs">
+              {% for url in page.scrapbook_urls %}
+              <button type="button" class="scrapbook-thumb-btn" data-lightbox-src="{{ url }}" aria-label="Scrapbook item {{ loop.index }}">
+                <img src="{{ url }}" alt="" loading="lazy">
+              </button>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </aside>
+          {% endif %}
+
+          <div class="page-content-col">
+            {% set page_entries = page.entries or [] %}
+            {% if not page_entries %}
+              <div class="entry"><p class="entry-text">No transcription has been added for this page yet.</p></div>
+            {% endif %}
+            {% for entry in page_entries %}
+            <section class="entry">
+              {% if entry.entry_date %}<p class="entry-date">{{ entry.entry_date }}</p>{% endif %}
+              <p class="entry-text translation">{{ (entry.translation or entry.transcription or '') | e }}</p>
+              <p class="entry-text transcription">{{ (entry.transcription or entry.translation or '') | e }}</p>
+              {% if entry.notes %}<div class="notes">{{ entry.notes | e }}</div>{% endif %}
+            </section>
+            {% endfor %}
+
+            {% if page.people %}
+            <div class="people" aria-label="People mentioned">
+              {% for person in page.people %}<span class="tag">{{ person }}</span>{% endfor %}
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </article>
+      {% endfor %}
+    </main>
+
+    <div class="static-footer">
+      Static excerpt exported from Journal Capture • {{ export_date or 'today' }} • Open index.html in any browser (file:// or static host)
+    </div>
+  </div>
+
+  <div id="reader-menu-sheet" class="reader-sheet" aria-hidden="true" role="dialog" aria-label="Reading options">
+    <div class="reader-sheet-backdrop" data-sheet-close></div>
+    <div class="reader-sheet-panel">
+      <header class="reader-sheet-head">
+        <h2>Reading options</h2>
+        <button type="button" class="reader-sheet-close" data-sheet-close aria-label="Close menu">×</button>
+      </header>
+      <div class="reader-sheet-actions">
+        <button class="control primary js-resume" type="button">Resume reading</button>
+        <button class="control js-toggle-images" type="button">Hide images</button>
+        <button class="control js-reset-progress" type="button">Reset progress</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-nav" aria-label="Page navigation">
+    <button type="button" id="prev-page">← Previous</button>
+    <div class="center" id="mobile-current">Page 1</div>
+    <button type="button" id="next-page">Next →</button>
+  </div>
+
+  <div id="lightbox" class="modal" role="dialog" aria-modal="true" aria-label="Page image viewer" aria-hidden="true">
+    <div class="modal-backdrop" data-lightbox-close></div>
+    <div class="lightbox-shell">
+      <button type="button" class="lightbox-close" data-lightbox-close aria-label="Close image viewer">×</button>
+      <img id="lightbox-img" class="lightbox-image" alt="Expanded journal image">
+    </div>
+  </div>
+
+  <script>
+    const journalId = {{ (journal.id or 'static') | tojson }};
+    const storageKey = `journal_static_reader_${journalId}`;
+    const sections = Array.from(document.querySelectorAll('.page-section'));
+    const pageSlugs = sections.map(s => s.dataset.pageSlug);
+    const pageNumbers = Object.fromEntries(sections.map(s => [s.dataset.pageSlug, s.dataset.pageNumber]));
+    const progressFill = document.getElementById('progress-fill');
+    const progressLabel = document.getElementById('progress-label');
+    const currentLabel = document.getElementById('current-label');
+    const mobileCurrent = document.getElementById('mobile-current');
+    const pageJump = document.getElementById('page-jump');
+    const resumeCard = document.getElementById('resume-card');
+    const resumeCopy = document.getElementById('resume-copy');
+    let currentSlug = pageSlugs[0] || null;
+    let progress = readProgress();
+
+    function readProgress() {
+      try {
+        const raw = localStorage.getItem(storageKey);
+        if (!raw) return { current: null, read: [], mode: 'translation', images: true };
+        return { current: null, read: [], mode: 'translation', images: true, ...JSON.parse(raw) };
+      } catch { return { current: null, read: [], mode: 'translation', images: true }; }
+    }
+    function writeProgress() {
+      try { localStorage.setItem(storageKey, JSON.stringify(progress)); } catch {}
+    }
+    function setMode(mode) {
+      progress.mode = mode;
+      document.body.classList.toggle('mode-translation', mode === 'translation');
+      const tBtn = document.getElementById('mode-translation');
+      const oBtn = document.getElementById('mode-transcription');
+      if (tBtn) tBtn.classList.toggle('active', mode === 'translation');
+      if (oBtn) oBtn.classList.toggle('active', mode === 'transcription');
+      writeProgress();
+    }
+    function setImages(show) {
+      progress.images = show;
+      document.querySelectorAll('[data-image-block]').forEach(el => el.style.display = show ? '' : 'none');
+      const label = show ? 'Hide images' : 'Show images';
+      document.querySelectorAll('.js-toggle-images').forEach(btn => { btn.textContent = label; });
+      writeProgress();
+    }
+    function updateUI() {
+      const readSet = new Set(progress.read || []);
+      sections.forEach(section => {
+        const state = section.querySelector('[data-read-state]');
+        if (state) state.textContent = readSet.has(section.dataset.pageSlug) ? 'Read' : 'Unread';
+      });
+      const pct = pageSlugs.length ? Math.round((readSet.size / pageSlugs.length) * 100) : 0;
+      progressFill.style.width = `${pct}%`;
+      progressLabel.textContent = `${pct}% read · ${readSet.size}/${pageSlugs.length} pages`;
+      const pageText = currentSlug ? `Page ${pageNumbers[currentSlug]}` : 'Page —';
+      currentLabel.textContent = pageText;
+      mobileCurrent.textContent = pageText;
+      if (pageJump && currentSlug) pageJump.value = currentSlug;
+    }
+    function markRead(slug) {
+      if (!slug) return;
+      progress.current = slug;
+      progress.read = Array.from(new Set([...(progress.read || []), slug]));
+      currentSlug = slug;
+      writeProgress();
+      updateUI();
+    }
+    function goToSlug(slug, behavior='smooth') {
+      const target = document.getElementById(slug);
+      if (!target) return;
+      target.scrollIntoView({ behavior, block: 'start' });
+      markRead(slug);
+    }
+    function nearby(delta) {
+      const idx = Math.max(0, pageSlugs.indexOf(currentSlug));
+      const next = pageSlugs[Math.min(pageSlugs.length - 1, Math.max(0, idx + delta))];
+      if (next) goToSlug(next);
+    }
+    function resume() { goToSlug(progress.current || pageSlugs[0]); }
+
+    document.getElementById('mode-translation').addEventListener('click', () => setMode('translation'));
+    document.getElementById('mode-transcription').addEventListener('click', () => setMode('transcription'));
+    document.querySelectorAll('.js-toggle-images').forEach(btn => {
+      btn.addEventListener('click', () => { setImages(!progress.images); closeReaderSheet(); });
+    });
+    document.querySelectorAll('.js-reset-progress').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (!confirm('Reset reading progress for this excerpt on this device?')) return;
+        progress = { current: pageSlugs[0] || null, read: [], mode: progress.mode || 'translation', images: progress.images !== false };
+        writeProgress(); updateUI();
+        closeReaderSheet();
+      });
+    });
+    document.querySelectorAll('.js-resume').forEach(btn => {
+      btn.addEventListener('click', () => { resume(); closeReaderSheet(); });
+    });
+    document.getElementById('resume-card-button').addEventListener('click', resume);
+    document.getElementById('prev-page').addEventListener('click', () => nearby(-1));
+    document.getElementById('next-page').addEventListener('click', () => nearby(1));
+    pageJump?.addEventListener('change', e => goToSlug(e.target.value));
+
+    const readerSheet = document.getElementById('reader-menu-sheet');
+    const openReaderMenuBtn = document.getElementById('open-reader-menu');
+    const readerSheetCloseBtn = readerSheet?.querySelector('.reader-sheet-close');
+
+    function openReaderSheet() {
+      if (!readerSheet || !openReaderMenuBtn) return;
+      readerSheet.classList.add('visible');
+      readerSheet.setAttribute('aria-hidden', 'false');
+      openReaderMenuBtn.setAttribute('aria-expanded', 'true');
+      document.body.classList.add('sheet-open');
+      readerSheetCloseBtn?.focus();
+    }
+    function closeReaderSheet() {
+      if (!readerSheet || !openReaderMenuBtn) return;
+      readerSheet.classList.remove('visible');
+      readerSheet.setAttribute('aria-hidden', 'true');
+      openReaderMenuBtn.setAttribute('aria-expanded', 'false');
+      document.body.classList.remove('sheet-open');
+    }
+    function readerSheetIsOpen() {
+      return readerSheet?.classList.contains('visible');
+    }
+
+    openReaderMenuBtn?.addEventListener('click', openReaderSheet);
+    document.querySelectorAll('[data-sheet-close]').forEach(el => {
+      el.addEventListener('click', closeReaderSheet);
+    });
+    readerSheet?.querySelectorAll('.reader-sheet-actions a.control').forEach(link => {
+      link.addEventListener('click', closeReaderSheet);
+    });
+
+    const lightbox = document.getElementById('lightbox');
+    const lightboxImg = document.getElementById('lightbox-img');
+    const lightboxCloseBtn = lightbox?.querySelector('.lightbox-close');
+
+    function openLightbox(src) {
+      if (!lightbox || !lightboxImg || !src) return;
+      lightboxImg.src = src;
+      lightbox.classList.add('visible');
+      lightbox.setAttribute('aria-hidden', 'false');
+      lightboxCloseBtn?.focus();
+    }
+    function closeLightbox() {
+      if (!lightbox || !lightboxImg) return;
+      lightbox.classList.remove('visible');
+      lightbox.setAttribute('aria-hidden', 'true');
+      lightboxImg.src = '';
+    }
+
+    document.querySelectorAll('[data-lightbox-src]').forEach(el => {
+      el.addEventListener('click', () => openLightbox(el.dataset.lightboxSrc));
+    });
+    document.querySelectorAll('[data-lightbox-close]').forEach(el => {
+      el.addEventListener('click', closeLightbox);
+    });
+    lightboxImg?.addEventListener('click', e => e.stopPropagation());
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') {
+        if (lightbox?.classList.contains('visible')) closeLightbox();
+        else if (readerSheetIsOpen()) {
+          closeReaderSheet();
+          openReaderMenuBtn?.focus();
+        }
+        return;
+      }
+      if (e.key === 'ArrowRight') nearby(1);
+      if (e.key === 'ArrowLeft') nearby(-1);
+    });
+
+    if (progress.current && pageSlugs.includes(progress.current)) {
+      resumeCard.classList.add('visible');
+      resumeCopy.textContent = `Continue at page ${pageNumbers[progress.current]}.`;
+    }
+    setMode(progress.mode || 'translation');
+    setImages(progress.images !== false);
+    updateUI();
+
+    const observer = new IntersectionObserver(entries => {
+      const visible = entries.filter(e => e.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+      if (visible) markRead(visible.target.dataset.pageSlug);
+    }, { root: null, threshold: [0.35, 0.6] });
+    sections.forEach(section => observer.observe(section));
+  </script>
+</body>
+</html>

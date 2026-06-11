@@ -159,6 +159,62 @@ Recommended model:
 
 The app is proxy-aware and supports forwarded headers.
 
+## Exporting a static reader for sharing
+
+You can turn any journal (or a small subset of its pages) into a fully static, self-contained website for easy sharing. The exported site includes the beautiful read-only reader UI (translation/original toggle, progress tracking with localStorage, lightbox for main scans + scrapbook attachments, keyboard nav, etc.) and only the images + parsed text you choose. No server, no Python, no database — just `index.html` + a `media/` folder next to it.
+
+The exporter reuses the exact same flat-file parser and entry model as the live app (including legacy single-entry pages and multi-entry pages).
+
+### Basic usage (recommended: inside the project venv)
+
+```bash
+cd /path/to/journalapp
+source venv/bin/activate
+
+# Export a small subset by physical page number
+python export_static.py \
+  --journal-id 6cd68ae1-1cb7-4f0a-a7fa-6ac270c5a855 \
+  --pages "1-4,7" \
+  --out-dir ~/Public/my-journal-excerpt
+
+# Or point directly at a copied/backed-up journal directory (great when you just have the files)
+python export_static.py \
+  --journal-dir /path/to/some/journal-uuid-dir \
+  --pages "all" \
+  --include-cover \
+  --include-raw-md \
+  --out-dir ./journal-share-2026-06
+```
+
+- `--pages` accepts ranges and lists: `1-5,12,20-22`. Page numbers are the physical `page_number` values (or the numeric part of the slug).
+- Use `--all` (or `--pages all`) to export everything — be careful with 100+ page journals.
+- `--include-cover` and `--include-raw-md` are optional.
+- Output is a relocatable folder. Zip it, rsync it, drop it on Netlify/GitHub Pages, put it on a USB, email it, etc.
+- Open `index.html` directly (file:// works) or serve the folder with any static server.
+
+After export you will see:
+- `index.html` — the complete reader
+- `media/` — only the page scans and scrapbook images referenced by the chosen pages (+ cover if requested)
+- `data.json` — machine-readable parsed entries (for further processing or auditing)
+- `raw/` (only if `--include-raw-md`) — the original `.md` sidecars for the subset
+- `README.txt` — human instructions for the recipient
+
+Preview locally right after export:
+```bash
+python export_static.py ... --serve
+# or manually:
+cd <out-dir> && python -m http.server 0
+```
+
+### Requirements for the exporter
+Run it from the journalapp directory using the project's Python environment (the same venv you use for `python app.py`). It needs the packages already listed in `requirements.txt` (Flask brings in Jinja2 transitively; PyYAML and Pillow are used for loading). If you run it in a minimal environment:
+
+```bash
+pip install -r requirements.txt jinja2
+```
+
+The *generated static site* has **zero** runtime dependencies — pure HTML + CSS + JS + images.
+
 ## Run as a user service
 ```bash
 systemctl --user daemon-reload
